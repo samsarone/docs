@@ -100,8 +100,8 @@ const config = {
             title: 'More',
             items: [
               {
-                label: 'GitHub',
-                href: 'https://github.com/facebook/docusaurus',
+                label: 'Blog',
+                href: 'https://blog.samsar.one',
               },
             ],
           },

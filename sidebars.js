@@ -24,7 +24,8 @@ const sidebars = {
         items: [
           // List your API documentation files here
           'api',
-          // Add more documents as needed
+          'pricing',
+          'speakers',
         ],
       },
     ],
