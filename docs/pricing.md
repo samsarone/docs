@@ -1,9 +1,9 @@
 
 # Pricing Chart 
 
-# You need to purchase a creator's plan to start creating videos.
-## Creator's plan is a monthly subscription for $49.99 and comes with 5k credits and commercial usage rights.
-## Additional credits can be purchased at $10 for 1k credits.
+We now have a single payment plan that can be used by all customers.
+Creator's plan is a monthly subscription for $49.99 and comes with 5000 credits and full feature set.
+Additional credits can be purchased at $10 for 1k credits.
 
 
 ## 1. VidGPT Pricing
@@ -18,14 +18,12 @@ For example, a **1-minute** video (60 seconds) would cost:
 ## 2. Express Narrative Creator Pricing
 Express Narrative Creator (narrative movies) is priced based on the specific model used.  
 
-(Any additional explanatory text about how Express Narrative Creator pricing is calculated can go here.)
 
 ---
 
 ## 3. Studio Creator Pricing
 Studio Creator pricing is also based on the model used.  
 
-(Any additional explanatory text about how Studio Creator pricing is calculated can go here.)
 
 ---
 
@@ -160,7 +158,6 @@ These are the types of TTS engines supported (not direct pricing, but for refere
 
 ### 4.6 Theme Model Prices
 
-*(No explicit model key provided; applies to all theme queries.)*
 
 | **Operation Type** | **Tokens per Operation** | **Price (credits)** |
 |--------------------|--------------------------|---------------------|
@@ -170,7 +167,6 @@ These are the types of TTS engines supported (not direct pricing, but for refere
 
 ### 4.7 Translation Model Prices
 
-*(No explicit model key provided; applies to translation.)*
 
 | **Operation Type** | **Tokens per Operation** | **Price (credits)** |
 |--------------------|--------------------------|---------------------|
@@ -180,7 +176,6 @@ These are the types of TTS engines supported (not direct pricing, but for refere
 
 ### 4.8 Prompt Generation Model Prices
 
-*(No explicit model key provided; applies to prompt generation.)*
 
 | **Operation Type** | **Tokens per Operation** | **Price (credits)** |
 |--------------------|--------------------------|---------------------|

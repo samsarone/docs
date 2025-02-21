@@ -1,9 +1,9 @@
 ```markdown
 # Public API Documentation
 
-This document describes the publicly available endpoints for creating and managing quick video or narrative-generation sessions. All endpoints require a valid `API_KEY` passed through the request headers for authentication.
+This document describes the publicly available endpoints for creating and managing quick video or narrative-generation sessions. All endpoints require a valid `API-KEY` passed through the request headers for authentication.
 
----
+
 
 ## Base URL
 
@@ -17,96 +17,33 @@ GET  /status
 ```
 
 
+### Authentication
 
----
-
-## Authentication
-
-All requests must include an `API_KEY` header. For example:
+All requests must include an `api-key` header. For example:
 
 ```
-API_KEY: YOUR_API_KEY_HERE
+API-KEY: Get your API key from the settings in the dashboard.
 ```
 
-or
 
-```
-api_key: YOUR_API_KEY_HERE
-```
+If the `API-KEY` is missing, empty, or invalid, the server will respond with an error status:
 
-If the `API_KEY` is missing, empty, or invalid, the server will respond with an error status:
-
-- **400 Bad Request** if the `API_KEY` is missing or empty.
-- **401 Unauthorized** if the `API_KEY` is invalid.
+- **400 Bad Request** if the `API-KEY` is missing or empty.
+- **401 Unauthorized** if the `API-KEY` is invalid.
 
 ---
 
 ## Endpoints
 
-### 1. POST `/create_narrative`
 
-Creates a new "narrative" session. This endpoint is primarily used for generating an output based on multiple text lines (scenes) and optional generative video.
 
-#### Request Headers
-
-- `API_KEY`: String. (Required)
-
-#### Request Body
-
-```json
-{
-  "input": {
-    "prompt_list": [ "...", "..." ],   // OR a single string with newline-delimited prompts
-    "speaker": "string",               // (Optional) e.g., "alloy", "echo", "fable", etc.
-    "provider": "string",              // (Optional) e.g., "OPENAI" or "PLAYHT"
-    "add_generative_video": true,      // (Optional) boolean
-    "image_model": "string",           // (Required) e.g. "FLUX1.1PRO", "IMAGEN3", etc.
-    "video_model": "string",           // (Optional but required if add_generative_video = true)
-    "aspect_ratio": "string"           // (Optional) e.g., "16:9", "9:16"
-  },
-  "webhookUrl": "https://your-webhook-url.com"
-}
-```
-
-| Field                  | Type      | Required | Description                                                                                   |
-|------------------------|-----------|----------|-----------------------------------------------------------------------------------------------|
-| `prompt_list`          | array or string | **Yes**  | Each line of the narrative (scenes). If a string, lines are split by newline. Cannot exceed 20 lines. |
-| `speaker`              | string    | No       | Speaker voice to use if TTS is part of the generation (e.g., `alloy`, `echo`, etc.).          |
-| `provider`             | string    | No       | TTS provider (e.g., `OPENAI`, `PLAYHT`).                                                      |
-| `add_generative_video` | boolean   | No       | Whether or not to include generative video in the narrative.                                  |
-| `image_model`          | string    | **Yes**  | The image model used for generating images (e.g., `FLUX1.1PRO`, `IMAGEN3`, etc.). Must be an **express** model if you want immediate support. |
-| `video_model`          | string    | Required if `add_generative_video` = true | The video model used (e.g., `RUNWAYML`, `KLINGIMGTOVIDPRO`). Must be an **express** model if you want immediate support. |
-| `aspect_ratio`         | string    | No       | Aspect ratio for the final output (e.g., `16:9`, `9:16`).                                     |
-| `webhookUrl`           | string    | No       | If provided, the system may send callbacks to this URL with status updates or final results.  |
-
-#### Validation Rules
-
-- `prompt_list` must not be empty and must not exceed 20 lines.
-- `image_model` must be a valid image-generation model (and ideally one marked as `isExpressModel: true` in your system’s configuration if you require immediate generation).
-- If `add_generative_video` is `true`, `video_model` must be provided and must be a valid video-generation model (similarly with `isExpressModel: true`).
-- If any validations fail, returns a **400 Bad Request** response with an error message.
-
-#### Response
-
-```json
-{
-  "request_id": "some-session-id"
-}
-```
-
-- `request_id`: A unique identifier for the narrative-generation request. Use this ID to query status via the `/status` endpoint.
-
-**Note**: In the provided code snippet, a direct response is currently missing. You should ensure your implementation includes a final `res.status(200).json({ request_id: sessionId })` or a similar JSON response.
-
----
-
-### 2. POST `/create_movie`
+### POST `/create_movie`
 
 Creates a new movie-generation session based on a single prompt. 
 
 #### Request Headers
 
-- `API_KEY`: String. (Required)
+- `API-KEY`: String. (Required)
 
 #### Request Body
 
@@ -136,7 +73,7 @@ Creates a new movie-generation session based on a single prompt.
 
 - `prompt` is required and cannot be empty or exceed 500 characters.
 - `image_model` must be among the recognized image-generation models and typically flagged `isExpressModel: true`.
-- `video_model` must be among the recognized video-generation models and typically flagged `isExpressModel: true`.
+- `video_model` must be one of LUMA or KLINGIMGTOVIDPRO.
 - `duration` must be a number and cannot exceed 120 seconds.
 - If any validations fail, returns a **400 Bad Request** with an error message.
 
@@ -160,7 +97,7 @@ Retrieves the current status of a previously created session (either narrative o
 
 #### Request Headers
 
-- `API_KEY`: String. (Required)
+- `API-KEY`: String. (Required)
 
 #### Query Parameters
 
@@ -207,7 +144,7 @@ If an internal error occurs while fetching the status, returns a **500 Internal 
   Occurs if required fields are missing or invalid (e.g., missing `prompt`, exceeding length limits, invalid model keys, missing `request_id` query parameter).
 
 - **401 Unauthorized**  
-  Occurs if the supplied `API_KEY` is invalid.
+  Occurs if the supplied `API-KEY` is invalid.
 
 - **500 Internal Server Error**  
   Occurs if an unexpected error happens on the server (e.g., database issue, unhandled exception).
@@ -227,38 +164,10 @@ Ensure your webhook endpoint is accessible externally and can handle JSON POST r
 
 ---
 
-## Example Workflow
-
-1. **Create a narrative**:
-   ```bash
-   curl -X POST https://api.yourserver.com/create_narrative \
-     -H "Content-Type: application/json" \
-     -H "API_KEY: YOUR_API_KEY_HERE" \
-     -d '{
-       "input": {
-         "prompt_list": ["Scene 1", "Scene 2"],
-         "speaker": "alloy",
-         "provider": "OPENAI",
-         "add_generative_video": true,
-         "image_model": "FLUX1.1PRO",
-         "video_model": "RUNWAYML",
-         "aspect_ratio": "16:9"
-       },
-       "webhookUrl": "https://yourwebhook.com/hook"
-     }'
-   ```
-
-   Response:
-   ```json
-   {
-     "request_id": "abc12345"
-   }
-   ```
-
 2. **Get status of your request**:
    ```bash
    curl -X GET "https://api.yourserver.com/status?request_id=abc12345" \
-     -H "API_KEY: YOUR_API_KEY_HERE"
+     -H "API-KEY: YOUR_API_KEY_HERE"
    ```
 
    Response (example):
