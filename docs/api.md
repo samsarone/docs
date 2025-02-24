@@ -1,17 +1,10 @@
-```markdown
-# Public API Documentation
-
-This document describes the publicly available endpoints for creating and managing quick video or narrative-generation sessions. All endpoints require a valid `API-KEY` passed through the request headers for authentication.
-
-
-
 ## Base URL
 
 Base URL is https://api.samsar.one/v1/video/
 
 
 ```
-POST /create_narrative
+
 POST /create_movie
 GET  /status
 ```
@@ -64,8 +57,8 @@ Creates a new movie-generation session based on a single prompt.
 |-----------------|--------|----------|----------------------------------------------------------------------------------------------------------|
 | `prompt`        | string | **Yes**  | The text prompt for generating the movie. Cannot exceed 500 characters.                                 |
 | `aspect_ratio`  | string | No       | Desired aspect ratio (e.g., `"16:9"`, `"9:16"`).                                                         |
-| `image_model`   | string | **Yes**  | Image model key (must be valid and typically `isExpressModel: true`).                                   |
-| `video_model`   | string | **Yes**  | Video model key (must be valid and typically `isExpressModel: true`).                                   |
+| `image_model`   | string | **Yes**  | Image model key (must be valid and one of FLUX1.1PRO and IMAGEN3`).                                   |
+| `video_model`   | string | **Yes**  | Video model key (must be one of `).                                   |
 | `duration`      | number | **Yes**  | Duration in seconds. Must be a valid number ≤ 120.                                                       |
 | `webhookUrl`    | string | No       | If provided, the system may send callbacks to this URL with status updates or final results.            |
 
@@ -101,7 +94,7 @@ Retrieves the current status of a previously created session (either narrative o
 
 #### Query Parameters
 
-- `request_id`: **Required**. The unique ID you received from either `/create_narrative` or `/create_movie`.
+- `request_id`: **Required**. The unique ID you received from `/create_movie`.
 
 Example request:  
 ```
@@ -153,7 +146,7 @@ If an internal error occurs while fetching the status, returns a **500 Internal 
 
 ## Webhook Usage
 
-If you supply a `webhookUrl` in the request body (`/create_narrative` or `/create_movie`), the server may send asynchronous callbacks (HTTP POST) to that URL with status updates. The exact payload of these callbacks is determined by your system’s implementation, but typically includes:
+If you supply a `webhookUrl` in the request body ( `/create_movie`), the server may send asynchronous callbacks (HTTP POST) to that URL with status updates. The exact payload of these callbacks is determined by your system’s implementation, but typically includes:
 
 - `request_id` (for correlating to your original request)
 - `status`
