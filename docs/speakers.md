@@ -1,168 +1,73 @@
 # Speakers Chart
 ---
 
-## 1. PLAY_SPEECH_LIST
-
-### Angelo
-- **label**: Angelo  
-- **gender**: m  
-- **age**: young  
-- **style**: conversational  
-- **voice name**: dialog angelo  
-- **value**: `s3://voice-cloning-zero-shot/baf1ef41-36b6-428c-9bdf-50ba54682bd8/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Angelo Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Angelo_Sample.wav)
-
-### Deedee
-- **label**: Deedee  
-- **gender**: f  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog deedee  
-- **value**: `s3://voice-cloning-zero-shot/e040bd1b-f190-4bdb-83f0-75ef85b18f84/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Deedee Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Deedee_Sample.wav)
-
-### Jennifer
-- **label**: Jennifer  
-- **gender**: f  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog jennifer  
-- **value**: `s3://voice-cloning-zero-shot/801a663f-efd0-4254-98d0-5c175514c3e8/jennifer/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Jennifer Sample](https://peregrine-samples.s3.amazonaws.com/parrot-samples/jennifer.wav)
-
-### Briggs
-- **label**: Briggs  
-- **gender**: m  
-- **style**: conversational  
-- **voice name**: dialog briggs  
-- **value**: `s3://voice-cloning-zero-shot/71cdb799-1e03-41c6-8a05-f7cd55134b0b/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Briggs Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Briggs_Sample.wav)
-
-### Samara
-- **label**: Samara  
-- **gender**: f  
-- **style**: conversational  
-- **voice name**: dialog samara  
-- **value**: `s3://voice-cloning-zero-shot/90217770-a480-4a91-b1ea-df00f4d4c29d/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Samara Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Samara_Sample.wav)
-
-### Aaliyah
-- **label**: Aaliyah  
-- **gender**: f  
-- **style**: conversational  
-- **voice name**: dialog aaliyah  
-- **value**: `s3://voice-cloning-zero-shot/f6c4ed76-1b55-4cd9-8896-31f7535f6cdb/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Aaliyah Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Aaliyah_Sample.wav)
-
-### Arsenio
-- **label**: Arsenio  
-- **gender**: m  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog arsenio  
-- **value**: `s3://voice-cloning-zero-shot/65977f5e-a22a-4b36-861b-ecede19bdd65/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Arsenio Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Arsenio_Sample.wav)
-
-### Timo
-- **label**: Timo  
-- **gender**: m  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog timo  
-- **value**: `s3://voice-cloning-zero-shot/677a4ae3-252f-476e-85ce-eeed68e85951/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Timo Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Timo_Sample.wav)
-
-### Dexter
-- **label**: Dexter  
-- **gender**: m  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog dexter  
-- **value**: `s3://voice-cloning-zero-shot/b27bc13e-996f-4841-b584-4d35801aea98/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Dexter Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Dexter_Sample.wav)
-
-### Briggs (alternate)
-- **label**: Briggs  
-- **gender**: m  
-- **age**: old  
-- **style**: conversational  
-- **voice name**: dialog briggs  
-- **value**: `s3://voice-cloning-zero-shot/71cdb799-1e03-41c6-8a05-f7cd55134b0b/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Briggs Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Briggs_Sample.wav)
-
-### Nia
-- **label**: Nia  
-- **gender**: f  
-- **age**: young  
-- **style**: conversational  
-- **voice name**: dialog nia  
-- **value**: `s3://voice-cloning-zero-shot/831bd330-85c6-4333-b2b4-10c476ea3491/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Nia Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Nia_Sample.wav)
-
-### Inara
-- **label**: Inara  
-- **gender**: f  
-- **age**: middle  
-- **style**: conversational  
-- **voice name**: dialog inara  
-- **value**: `s3://voice-cloning-zero-shot/adb83b67-8d75-48ff-ad4d-a0840d231ef1/original/manifest.json`  
-- **provider**: PLAYAI  
-- **previewURL**: [Inara Sample](https://peregrine-samples.s3.us-east-1.amazonaws.com/parrot-samples/Inara_Sample.wav)
-
----
-
-## 2. OPENAI_SPEAKER_TYPES
+## 1. OPENAI_SPEAKER_TYPES
 
 ### Alloy
 - **label**: Alloy  
 - **Gender**: F  
 - **value**: `alloy`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Alloy Sample](https://cdn.openai.com/API/docs/audio/alloy.wav)
 
 ### Echo
 - **label**: Echo  
 - **Gender**: M  
 - **value**: `echo`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Echo Sample](https://cdn.openai.com/API/docs/audio/echo.wav)
 
 ### Fable
 - **label**: Fable  
-- **Gender**: F  
+- **Gender**: M  
 - **value**: `fable`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Fable Sample](https://cdn.openai.com/API/docs/audio/fable.wav)
 
 ### Onyx
 - **label**: Onyx  
 - **Gender**: M  
 - **value**: `onyx`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Onyx Sample](https://cdn.openai.com/API/docs/audio/onyx.wav)
 
 ### Nova
 - **label**: Nova  
 - **Gender**: F  
 - **value**: `nova`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Nova Sample](https://cdn.openai.com/API/docs/audio/nova.wav)
 
 ### Shimmer
 - **label**: Shimmer  
 - **Gender**: F  
 - **value**: `shimmer`  
-- **provider**: OPENAI
+- **provider**: OPENAI  
+- **previewURL**: [Shimmer Sample](https://cdn.openai.com/API/docs/audio/shimmer.wav)
 
----
+### Ash
+- **label**: Ash  
+- **Gender**: M  
+- **value**: `ash`  
+- **provider**: OPENAI  
+- **previewURL**: [Ash Sample](https://cdn.openai.com/API/docs/audio/ash.wav)
 
-## 3. ELEVENLABS_SPEAKER_TYPES
+### Coral
+- **label**: Coral  
+- **Gender**: F  
+- **value**: `coral`  
+- **provider**: OPENAI  
+- **previewURL**: [Coral Sample](https://cdn.openai.com/API/docs/audio/coral.wav)
+
+### Sage
+- **label**: Sage  
+- **Gender**: F  
+- **value**: `sage`  
+- **provider**: OPENAI  
+- **previewURL**: [Sage Sample](https://cdn.openai.com/API/docs/audio/sage.wav)
+
+
+## 2. ELEVENLABS_SPEAKER_TYPES
 
 ### Aria
 - **label**: Aria  
