@@ -1,0 +1,480 @@
+---
+title: Chat API
+description: Enhance copy with the /chat endpoints.
+sidebar_position: 3
+slug: /chat-api
+sidebar_label: Chat API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+import PlaygroundRail from '@site/src/components/PlaygroundRail';
+
+# Chat API
+
+<DocTopActions />
+
+<PlaygroundRail
+  endpointLabel="Chat endpoint"
+  href="https://samsar.one/playground/chat"
+>
+  Send a sample prompt with your API key in the Playground to see how the `/chat/enhance` response is formatted.
+</PlaygroundRail>
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+- Pricing:
+  - `/chat/enhance`: **30 credits** per request.
+  - Embeddings (`/chat/create_embedding`, `/chat/update_embedding`, `/chat/search_against_embedding`, `/chat/similar_to_embedding`): **$1 per million input tokens** (OpenAI tokenization for `text-embedding-3-large`). Credits use the standard 100 credits per USD mapping.
+  - `/chat/delete_embedding` and `/chat/delete_embeddings`: no token charges.
+- Synchronous: the response is returned in the same request; no `/status` polling needed.
+
+## POST /chat/enhance
+
+Improve a message while keeping its intent. `metadata` is optional contextual data that influences the rewrite.
+Provide `language` (ISO 639-1 code or language name) if you want the output in a specific language; otherwise detection is automatic.
+
+**Request body**
+
+```json
+{
+  "message": "Draft caption text",
+  "metadata": {
+    "audience": "gen z",
+    "tone": "playful"
+  },
+  "language": "FR"
+}
+```
+
+- `message` required, non-empty string.
+- `metadata` optional object.
+- `language` optional string, ISO 639-1 code (e.g., `EN`, `FR`, `TH`) or language name; defaults to auto-detect.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/chat/enhance \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "launching soon, stay tuned!",
+    "metadata": { "channel": "instagram" },
+    "language": "FR"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "content": "We’re launching soon—follow along for first looks and drop reminders!"
+}
+```
+
+**Common errors**
+
+- `400` missing or empty `message`.
+- `401` invalid API key.
+- `402` insufficient credits.
+
+---
+
+## POST /chat/create_embedding
+
+Create a new embedding template from a JSON array. Each record is converted into a search document, structured filters (numeric/categorical fields like `city`, `price`, `duration`, `min_age`, `max_age`) are detected and stored, and embeddings are generated using `text-embedding-3-large`.
+
+**Request body**
+
+```json
+{
+  "name": "listings",
+  "records": [
+    {
+      "id": "A1",
+      "city": "Austin",
+      "price": 1800,
+      "duration": 12,
+      "description": "Modern 1BR close to downtown."
+    }
+  ]
+}
+```
+
+- `records` required array of JSON objects.
+- `name` optional string. Also accepted: `embedding_name`, `template_name`.
+- Each record should include an `id`, `_id`, or equivalent identifier. If missing, the API generates one per record.
+- `field_options` optional map (or array) of per-field flags:
+  - `searchable: false` excludes the field (and nested paths) from embedding input.
+  - `filterable: true` includes the field in structured filters used for search/similar queries.
+  - `filterable: false` excludes the field from structured filters.
+  - `retrievable: false` removes the field from raw `record` payloads in search results.
+  - Use dot notation (e.g. `owner.email`) for nested fields.
+
+You can also inline flags in records using a `{ value, searchable, filterable, retrievable }` wrapper.
+
+```json
+{
+  "records": [
+    {
+      "id": "A1",
+      "internal_notes": { "value": "private note", "searchable": false, "retrievable": false }
+    }
+  ]
+}
+```
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/chat/create_embedding \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "listings",
+    "field_options": {
+      "description": { "searchable": true },
+      "internal_notes": { "searchable": false, "retrievable": false },
+      "price": { "filterable": true }
+    },
+    "records": [
+      { "id": "A1", "city": "Austin", "price": 1800, "description": "Modern 1BR close to downtown." },
+      { "id": "A2", "city": "Dallas", "price": 2200, "description": "Spacious 2BR with a balcony." }
+    ]
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_hash": "b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "hash_link": "embedding_template:b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "record_count": 2,
+  "structured_fields": [
+    { "key": "city", "type": "string" },
+    { "key": "price", "type": "number" }
+  ],
+  "unstructured_fields": ["description"]
+}
+```
+
+**Common errors**
+
+- `400` missing `records`.
+- `401` invalid API key.
+- `402` insufficient credits.
+
+---
+
+## POST /chat/update_embedding
+
+Append or update records for an existing template. New records are embedded and merged into the template schema; matching `sourceId` records are upserted.
+
+**Request body**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "field_options": {
+    "description": { "searchable": true },
+    "internal_notes": { "searchable": false, "retrievable": false },
+    "price": { "filterable": true }
+  },
+  "records": [
+    {
+      "id": "A3",
+      "city": "Houston",
+      "price": 2000,
+      "description": "Bright 2BR near the park."
+    }
+  ]
+}
+```
+
+`field_options` follows the same rules as `/chat/create_embedding`. If omitted, the template's existing field options are reused.
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_hash": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1908",
+  "record_count": 3,
+  "structured_fields": [
+    { "key": "city", "type": "string" },
+    { "key": "price", "type": "number" }
+  ],
+  "unstructured_fields": ["description"]
+}
+```
+
+**Common errors**
+
+- `400` missing `template_id` or `records`.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `404` template not found.
+
+---
+
+## POST /chat/delete_embeddings
+
+Delete all embeddings for a template. The template remains, but its record count becomes 0.
+
+**Request body**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3"
+}
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "deleted_count": 250,
+  "record_count": 0,
+  "status": "empty"
+}
+```
+
+**Common errors**
+
+- `400` missing `template_id`.
+- `401` invalid API key.
+- `404` template not found.
+
+---
+
+## POST /chat/delete_embedding
+
+Delete one or more embeddings from a template by record id. Use the `id` returned in search results or the `id` you supplied in the original records.
+
+**Request body**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "source_id": "A2"
+}
+```
+
+- `source_id` optional string. Also accepted: `sourceId`, `id`, `record_id`.
+- `source_ids` optional array of strings. Also accepted: `sourceIds`, `ids`, `record_ids`.
+- Provide either `source_id` or `source_ids`.
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "deleted_count": 1,
+  "record_count": 249,
+  "status": "ready"
+}
+```
+
+**Common errors**
+
+- `400` missing `template_id` or `source_id`/`source_ids`.
+- `401` invalid API key.
+- `404` template not found.
+
+---
+
+## POST /chat/search_against_embedding
+
+Search within a template using a natural language query. The API extracts structured filters first, then performs vector similarity. Optional rerank can re-order top results.
+
+**Request body**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "search_term": "2 bedroom apartment in Dallas under 2500",
+  "search_params": { "city": "Dallas", "price": { "max": 2500 } },
+  "limit": 10,
+  "num_candidates": 50,
+  "rerank": true,
+  "include_raw": true
+}
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_name": "listings",
+  "structured_filters": { "city": "Dallas", "price": 2500 },
+  "results": [
+    {
+      "id": "A2",
+      "score": 0.92,
+      "structured_filters": { "city": "Dallas", "price": 2200 },
+      "record": {
+        "id": "A2",
+        "city": "Dallas",
+        "price": 2200,
+        "description": "Spacious 2BR with a balcony."
+      }
+    }
+  ]
+}
+```
+
+- Optional `structured_filters` (or `filters`) can be supplied to force filters.
+- Optional `search_params` (or `searchParams`) supplies a filter payload validated against the template schema and applied before vector search. `structured_filters` overrides overlapping keys.
+- Use `include_raw: false` to omit the original record payloads.
+
+**Common errors**
+
+- `400` missing `template_id` or `search_term`.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `404` template not found.
+
+---
+
+## POST /chat/similar_to_embedding
+
+Return similar results for a query within a template (vector similarity only). You can pass a natural language `search_term` or a JSON payload in `search_json` which is converted into the template's search document before embedding.
+
+**Request body**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "search_term": "modern downtown apartment",
+  "search_params": { "city": "Austin" },
+  "limit": 10,
+  "min_results": 10
+}
+```
+
+**Request body (JSON search)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "search_json": {
+    "city": "Austin",
+    "price": 2000,
+    "description": "modern downtown apartment"
+  },
+  "limit": 10
+}
+```
+
+- Provide `search_term` or `search_json`.
+- Optional `search_params` (or `searchParams`) prefilters by structured fields (validated against the template schema) before vector similarity.
+- Optional `min_results` ensures at least that many results are requested (may still return fewer if the template has fewer matches).
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "structured_filters": {},
+  "matches": [
+    { "id": "A1", "score": 0.88 },
+    { "id": "A2", "score": 0.73 }
+  ]
+}
+```
+
+**Common errors**
+
+- `400` missing `template_id` or `search_term`/`search_json`.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `404` template not found.
+
+---
+
+## GET /chat/embedding_templates
+
+List embedding templates available for the API key.
+
+**Query params**
+
+- `limit` optional integer (default 50, max 100).
+- `offset` optional integer (default 0).
+
+**Sample request**
+
+```bash
+curl -X GET "https://api.samsar.one/v1/chat/embedding_templates?limit=25&offset=0" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "templates": [
+    {
+      "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+      "name": "listings",
+      "template_hash": "b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+      "hash_link": "embedding_template:b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+      "record_count": 3,
+      "structured_fields": [
+        { "key": "city", "type": "string" },
+        { "key": "price", "type": "number" }
+      ],
+      "unstructured_fields": ["description"],
+      "embedding_model": "text-embedding-3-large",
+      "created_at": "2024-11-03T12:00:00.000Z",
+      "updated_at": "2024-11-03T12:10:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "limit": 25,
+    "offset": 0,
+    "has_more": false
+  }
+}
+```
+
+**Common errors**
+
+- `401` invalid API key.
+
+---
+
+## GET /chat/embedding_status
+
+Check whether embeddings exist for a template id.
+
+**Query params**
+
+- `template_id` required string.
+
+**Sample request**
+
+```bash
+curl -X GET "https://api.samsar.one/v1/chat/embedding_status?template_id=66f3b0d64c8bca9c6f2bd1a3" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "has_embeddings": true,
+  "record_count": 3,
+  "status": "ready"
+}
+```
+
+**Common errors**
+
+- `400` missing `template_id`.
+- `401` invalid API key.
+- `404` template not found.

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunksamsar_docs=self.webpackChunksamsar_docs||[]).push([[390],{2926:(s,a,e)=>{e.r(a),e.d(a,{default:()=>c});e(6540);var r=e(6347),u=e(4848);function c(){return(0,u.jsx)(r.rd,{to:"/video"})}}}]);

@@ -1,0 +1,30 @@
+<svg width="240" height="52" viewBox="0 0 240 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pillLight" x1="18" y1="4" x2="222" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#E8F3FF" />
+    </linearGradient>
+    <linearGradient id="accentLight" x1="118" y1="12" x2="208" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1F7AEC" />
+      <stop offset="1" stop-color="#0EA5E9" />
+    </linearGradient>
+  </defs>
+  <style>
+    .wordmark {
+      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .submark {
+      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+  </style>
+  <rect x="1" y="1" width="238" height="50" rx="12" fill="url(#pillLight)" stroke="#C7D7F0" stroke-opacity="0.9" />
+  <text class="wordmark" x="22" y="31" font-size="18" fill="#0F172A">SAMSAR</text>
+  <text class="wordmark" x="132" y="31" font-size="18" fill="url(#accentLight)">ONE</text>
+  <text class="submark" x="234" y="31" font-size="14" fill="#375275" text-anchor="end">DOCS</text>
+</svg>

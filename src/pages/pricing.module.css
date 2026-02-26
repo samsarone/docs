@@ -1,0 +1,218 @@
+.hero {
+  padding: 4rem 0 2rem;
+}
+
+.heroInner {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pricing-text-color);
+  background: rgba(103, 212, 255, 0.12);
+}
+
+.title {
+  margin: 1rem 0 0.5rem;
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+}
+
+.lede {
+  margin: 0 auto;
+  font-size: 1.05rem;
+  color: var(--pricing-muted-color);
+}
+
+.main {
+  padding-bottom: 4rem;
+}
+
+.pricingSection {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pricingIntro {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 2rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pricingGrid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: start;
+}
+
+.grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.planCard {
+  padding: 2rem;
+}
+
+.planHeader {
+  margin-bottom: 1.5rem;
+}
+
+.planName {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pricing-subtle-color);
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.price {
+  font-size: 2.6rem;
+  font-weight: 700;
+}
+
+.priceUnit {
+  font-size: 1rem;
+  color: var(--pricing-subtle-color);
+}
+
+.priceMeta {
+  margin: 0.4rem 0 0;
+  color: var(--pricing-muted-color);
+}
+
+.detailList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.detailList li {
+  position: relative;
+  padding-left: 1.2rem;
+}
+
+.detailList li::before {
+  content: '+';
+  position: absolute;
+  left: 0;
+  color: var(--ifm-color-primary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.infoCard {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.cardText {
+  margin: 0;
+  color: var(--pricing-muted-color);
+}
+
+.apiCard {
+  padding: 1.75rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.apiPricingTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.apiPricingList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.apiPricingItem {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.95rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--pricing-divider-color);
+}
+
+.apiPricingItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.apiEndpoint {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  color: var(--pricing-text-color);
+}
+
+.apiPrice {
+  color: var(--pricing-muted-color);
+  line-height: 1.35;
+}
+
+.apiNotes {
+  color: var(--pricing-subtle-color);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+@media screen and (max-width: 640px) {
+  .hero {
+    padding: 3rem 0 1.5rem;
+  }
+
+  .planCard,
+  .infoCard {
+    padding: 1.5rem;
+  }
+}
+.page {
+  --pricing-text-color: #0b0b0b;
+  --pricing-muted-color: #0b0b0b;
+  --pricing-subtle-color: #0b0b0b;
+  --pricing-divider-color: rgba(11, 11, 11, 0.2);
+  color: var(--pricing-text-color);
+}
+
+:global([data-theme='dark']) .page {
+  --pricing-text-color: #ffffff;
+  --pricing-muted-color: #ffffff;
+  --pricing-subtle-color: #ffffff;
+  --pricing-divider-color: rgba(255, 255, 255, 0.2);
+}

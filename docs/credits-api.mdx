@@ -1,0 +1,246 @@
+---
+title: Credits API
+description: Manage credit balances and create Stripe recharge links.
+sidebar_position: 4
+slug: /credits
+sidebar_label: Credits API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# Credits API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+- Content-Type: `application/json`
+
+Credits are billed at **1 USD = 100 credits**. Use these endpoints to check remaining credits and to generate a Stripe checkout link that tops up credits through the webhook.
+
+## GET /credits
+
+Fetch the current credit balance and the most recent top-up (if available).
+
+**Sample request**
+
+```bash
+curl https://api.samsar.one/v1/credits \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "remainingCredits": 4920,
+  "lastTopUp": {
+    "id": "66e21f9f1f3b0f0001c7a1a2",
+    "amountPaidCents": 5000,
+    "currency": "USD",
+    "paymentType": "one_time",
+    "paymentStatus": "paid",
+    "billingReason": "one_time",
+    "creditsApplied": 5000,
+    "paymentDate": "2024-09-12T10:08:11.000Z",
+    "stripeInvoiceId": "in_1Pxxx",
+    "stripeInvoiceNumber": "B7A2-1",
+    "invoicePdfUrl": "https://...",
+    "hostedInvoiceUrl": "https://...",
+    "receiptUrl": "https://...",
+    "receiptAvailable": true,
+    "productSummary": "Purchase 5000 credits"
+  }
+}
+```
+
+**Response headers**
+
+- `x-credits-remaining` returns the current balance.
+
+## POST /credits/recharge
+
+Generate a Stripe checkout link to recharge a specific number of credits.
+
+**Request body**
+
+```json
+{
+  "credits": 2500
+}
+```
+
+- `credits` is required, positive, and must be an integer.
+- Price is calculated as `credits / 100` in USD.
+- Use `/payment_status` with `checkoutSessionId` or `paymentIntentId` to poll for completion.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/credits/recharge \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"credits": 2500}'
+```
+
+**Success response (200)**
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "checkoutSessionId": "cs_test_123",
+  "paymentIntentId": "pi_123",
+  "paymentStatusEndpoint": "/v1/payment_status",
+  "credits": 2500,
+  "amountUsd": 25,
+  "amountCents": 2500,
+  "currency": "USD"
+}
+```
+
+**Common errors**
+
+- `400` invalid or missing `credits`.
+- `401` invalid API key.
+
+## POST /enable_autorecharge
+
+Enable or update auto-recharge settings for the API key. If no saved payment method exists, the response includes a Stripe setup URL to complete the enablement flow.
+
+**Request body**
+
+```json
+{
+  "thresholdCredits": 1000,
+  "amountUsd": 50,
+  "maxMonthlyUsd": 200,
+  "requestSetupSession": true
+}
+```
+
+- `thresholdCredits` (optional): auto-recharge triggers when credits fall below this value.
+- `amountUsd` (optional): charge amount in USD for each auto-recharge (1 USD = 100 credits).
+- `maxMonthlyUsd` (optional): cap auto-recharge spend per calendar month. Set to `0` to disable the cap.
+- `requestSetupSession` (optional): force a Stripe setup session if no payment method exists.
+- You can also send the payload under `input` (e.g. `{ "input": { ... } }`).
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/enable_autorecharge \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thresholdCredits": 1000,
+    "amountUsd": 50,
+    "maxMonthlyUsd": 200,
+    "requestSetupSession": true
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "autoRechargeEnabled": false,
+  "autoRechargeAmountUsd": 50,
+  "autoRechargeThreshold": 1000,
+  "autoRechargeMaxMonthlyUsd": 200,
+  "stripeCustomerId": "cus_123",
+  "setupSessionUrl": "https://checkout.stripe.com/c/setup/...",
+  "setupSessionId": "cs_test_456",
+  "setupIntentId": "seti_123",
+  "paymentStatusEndpoint": "/v1/payment_status",
+  "url": "https://checkout.stripe.com/c/setup/...",
+  "hasPaymentMethod": false,
+  "autoRechargeRun": null
+}
+```
+
+**Notes**
+
+- After Stripe setup completes, auto-recharge is enabled via the webhook and will trigger when credits drop below the threshold.
+- If `maxMonthlyUsd` is set, auto-recharges are capped to the remaining monthly allowance; charges are skipped once the cap is reached.
+- Use `/payment_status` with `setupSessionId` or `setupIntentId` to poll setup completion.
+
+## GET /payment_status
+
+Poll for the status of a Stripe checkout, payment intent, or setup intent created by the credits endpoints.
+
+**Query params**
+
+- `checkoutSessionId` (or `checkout_session_id`): Stripe Checkout Session id.
+- `paymentIntentId` (or `payment_intent_id`): Stripe PaymentIntent id.
+- `setupIntentId` (or `setup_intent_id`): Stripe SetupIntent id (auto-recharge setup).
+
+**Sample request**
+
+```bash
+curl "https://api.samsar.one/v1/payment_status?checkoutSessionId=cs_test_123" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "status": "pending",
+  "mode": "payment",
+  "checkoutSessionId": "cs_test_123",
+  "sessionStatus": "open",
+  "paymentStatus": "unpaid",
+  "paymentIntentId": "pi_123",
+  "paymentIntentStatus": "requires_payment_method",
+  "amountCents": 2500,
+  "currency": "usd"
+}
+```
+
+**Status values**
+
+- `pending`: still in progress.
+- `succeeded`: payment/setup completed.
+- `failed`: payment/setup failed or session expired.
+
+**Common errors**
+
+- `400` missing status identifier.
+- `403` session/intent does not belong to the requesting API key.
+## POST /auto_recharge/threshold
+
+Update the auto-recharge threshold for an account that already has auto-recharge enabled.
+
+**Request body**
+
+```json
+{
+  "thresholdCredits": 1500
+}
+```
+
+- `thresholdCredits` is required and must be a non-negative number.
+- Auto-recharge must already be enabled, otherwise the endpoint returns a 400 error.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/auto_recharge/threshold \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"thresholdCredits": 1500}'
+```
+
+**Success response (200)**
+
+```json
+{
+  "autoRechargeEnabled": true,
+  "autoRechargeThreshold": 1500,
+  "autoRechargeAmountUsd": 50,
+  "autoRechargeMaxMonthlyUsd": 200
+}
+```
+
+**Common errors**
+
+- `400` auto-recharge is not enabled (enable via `/enable_autorecharge` or the billing page).

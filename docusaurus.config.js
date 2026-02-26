@@ -10,7 +10,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'SamsarOne Docs',
+  title: 'Samsar Docs',
   tagline: 'Create Videos with generative tooling',
   favicon: 'img/favicon.png',
 
@@ -43,6 +43,7 @@ const config = {
       ({
         docs: {
           sidebarPath: './sidebars.js',
+          routeBasePath: '/',
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
@@ -75,13 +76,48 @@ const config = {
     ({
       // Replace with your project's social card
       image: 'img/samsar-social-card.png',
+      colorMode: {
+        defaultMode: 'dark',
+        respectPrefersColorScheme: true,
+      },
       navbar: {
-        title: 'SamsarOne Docs',
         logo: {
-          alt: 'Samsar One Docs',
-          src: 'img/logo1.png',
+          alt: 'Samsar Docs',
+          src: 'img/logo-text-light.svg',
+          srcDark: 'img/logo-text-dark.svg',
         },
         items: [
+          {
+            type: 'html',
+            position: 'right',
+            value: `
+              <div class="navbar-icon-group">
+                <a class="navbar-icon-link" href="https://samsar.one" target="_blank" rel="noreferrer" aria-label="Home">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 10.5 12 4l8 6.5" />
+                    <path d="M6.5 10.5V20h11V10.5" />
+                    <path d="M10 20v-5h4v5" />
+                  </svg>
+                </a>
+                <a class="navbar-icon-link" href="https://app.samsar.one" target="_blank" rel="noreferrer" aria-label="Studio">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="9" width="16" height="10" rx="2" />
+                    <path d="M4 9.25 7.2 4h4.2L8.2 9.25" />
+                    <path d="M15 9.25 18.2 4H22" />
+                    <path d="M8 13h8" />
+                  </svg>
+                </a>
+                <a class="navbar-icon-link" href="https://samsar.one/playground" target="_blank" rel="noreferrer" aria-label="Playground">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
+                    <path d="M9.5 9.5h5" />
+                    <path d="M9.5 14.5h5" />
+                    <path d="M12 9.5v10" />
+                  </svg>
+                </a>
+              </div>
+            `,
+          },
         ],
       },
       footer: {
@@ -100,6 +136,10 @@ const config = {
             title: 'More',
             items: [
               {
+                label: 'Pricing',
+                to: '/pricing',
+              },
+              {
                 label: 'Blog',
                 href: 'https://blog.samsar.one',
               },
@@ -114,6 +154,30 @@ const config = {
       },
     }),
 
+  headTags: [
+    {
+      tagName: 'meta',
+      attributes: {
+        'http-equiv': 'Cache-Control',
+        content: 'no-cache, no-store, must-revalidate',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        'http-equiv': 'Pragma',
+        content: 'no-cache',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        'http-equiv': 'Expires',
+        content: '0',
+      },
+    },
+  ],
+
 
   plugins: [
     [
@@ -121,8 +185,9 @@ const config = {
       {
         redirects: [
           {
-            from: '/',
-            to: '/docs/api', // Redirect the homepage to /docs
+            // Single entry avoids duplicate redirect files for trailing-slash variants
+            from: ['/docs/api'],
+            to: '/',
           },
         ],
       },

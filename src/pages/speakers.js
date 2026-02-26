@@ -1,7 +1,7 @@
-// src/pages/index.js
+// src/pages/speakers.js
 import React from 'react';
 import { Redirect } from '@docusaurus/router';
 
 export default function Home() {
-  return <Redirect to="/docs/speakers" />;
+  return <Redirect to="/video" />;
 }

@@ -1,0 +1,32 @@
+/**
+ * Overrides for the Docusaurus Heading component to preserve anchor behavior.
+ */
+
+.anchorWithStickyNavbar {
+  scroll-margin-top: calc(var(--ifm-navbar-height) + 0.5rem);
+}
+
+.anchorWithHideOnScrollNavbar {
+  scroll-margin-top: 0.5rem;
+}
+
+:global(.hash-link) {
+  opacity: 0;
+  padding-left: 0.5rem;
+  transition: opacity var(--ifm-transition-fast), transform 0.15s ease;
+  user-select: none;
+  cursor: pointer;
+  color: var(--ifm-color-primary);
+}
+
+:global(.hash-link::before) {
+  content: '#';
+  font-weight: 700;
+}
+
+:global(.hash-link:focus),
+:global(.hash-link:active),
+:global(*:hover > .hash-link) {
+  opacity: 1;
+  transform: translateY(-1px);
+}

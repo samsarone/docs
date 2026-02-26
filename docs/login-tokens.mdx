@@ -1,0 +1,64 @@
+---
+title: Login Tokens
+description: Create short-lived login tokens for client authentication.
+sidebar_position: 1
+slug: /login-tokens
+sidebar_label: Login Tokens
+---
+
+# Login Tokens
+
+Use this endpoint to mint a short-lived `loginToken` from your API key. The login token can be exchanged for a long-lived client `authToken` via `/users/verify_token`.
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+
+## POST /create_login_token
+
+Create a short-lived `loginToken` for a user associated with your API key.
+
+**Request body**
+
+No body is required.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/create_login_token \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "loginToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresInSeconds": 600,
+  "expiresAt": "2026-02-02T12:00:00.000Z"
+}
+```
+
+**Notes**
+
+- The token is short-lived and intended for handoff to the client app.
+- `GET /create_login_token` is also supported and returns the same payload.
+
+## Exchange login token for client auth token
+
+Once the client receives a `loginToken`, exchange it for a long-lived `authToken` using the user verification endpoint.
+
+**Sample request**
+
+```bash
+curl "https://api.samsar.one/users/verify_token?loginToken=$LOGIN_TOKEN"
+```
+
+**Success response (200)**
+
+```json
+{
+  "authToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "_id": "...",
+  "email": "user@example.com"
+}
+```

@@ -1,0 +1,685 @@
+---
+title: Video API
+description: Generative video APIs for Business Applications
+sidebar_position: 1
+slug: /video
+sidebar_label: Video API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+import PlaygroundRail from '@site/src/components/PlaygroundRail';
+
+# Video API
+
+<DocTopActions />
+
+<PlaygroundRail
+  endpointLabel="Video endpoints"
+  href="https://samsar.one/playground/video"
+>
+  Queue a sample video request with your API key and watch status updates without leaving the docs.
+</PlaygroundRail>
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+- Content-Type: `application/json`
+- Webhooks are optional; otherwise poll `GET /status?request_id=...`.
+- Credits are charged when a request is accepted; where available, responses include `x-credits-charged` and `x-credits-remaining`.
+
+## Pricing
+
+Credits are charged when a request is accepted. `/video/text_to_video` supports all express video models and uses the model pricing below (with a `1.5x` multiplier when `image_model` is `HUNYUAN`). `/video/image_list_to_video` is billed at a flat **75 credits/sec** based on the final render duration. `/video/translate_video` and `/video/join_videos` are billed at a flat **3 credits/sec** based on the source/joined video duration. `/video/add_outro_image` is billed at a flat **75 credits/request**.
+
+| `video_model`       | Base credits | Unit options (seconds) |
+| ------------------- | ------------ | ---------------------- |
+| `RUNWAYML`          | 90           | `5`, `10`              |
+| `KLINGIMGTOVID3PRO` | 90           | `5`, `10`              |
+| `HAILUO`            | 90           | `6`, `10`              |
+| `SEEDANCEI2V`       | 90           | `5`, `10`              |
+| `HAILUOPRO`         | 150          | `6`                    |
+| `SORA2`             | 150          | `8`                    |
+| `SORA2PRO`          | 450          | `8`                    |
+| `VEO3.1I2VFAST`     | 450          | `8`                    |
+| `VEO3.1I2V`         | 1050         | `8`                    |
+
+**Text-to-video formula**  
+`credits = base_model_credits × duration_unit_multiplier × (image_model === HUNYUAN ? 1.5 : 1)`
+
+**Image list to video formula**  
+`credits = duration_seconds × 75`
+
+**Translate video formula**  
+`credits = duration_seconds × 3`
+
+**Join videos formula**  
+`credits = duration_seconds × 3`
+
+**Add outro image formula**  
+`credits = 75`
+
+**Remove subtitles**  
+`POST /video/remove_subtitles` currently does not charge additional credits.
+
+**Cancel render**  
+`POST /video/cancel_render` currently does not charge additional credits.
+
+Example: `RUNWAYML` with `SEEDREAM` has a base cost of `90` credits (before duration-unit multiplier).
+
+## GET /video/supported_models
+
+Fetch the currently supported `image_model` and `video_model` keys for `POST /video/text_to_video`.
+
+**Request**
+
+```bash
+curl "https://api.samsar.one/v1/video/supported_models"
+```
+
+**Success response (200)**
+
+```json
+{
+  "IMAGE_MODELS": [
+    { "label": "GPTIMAGE1", "value": "GPTIMAGE1", "basePrice": 23 },
+    { "label": "IMAGEN4", "value": "IMAGEN4", "basePrice": 8 },
+    { "label": "SEEDREAM", "value": "SEEDREAM", "basePrice": 15 }
+  ],
+  "VIDEO_MODELS": [
+    { "label": "RUNWAYML", "value": "RUNWAYML", "basePrice": 90 },
+    { "label": "HAILUO", "value": "HAILUO", "basePrice": 90 },
+    { "label": "VEO3.1I2VFAST", "value": "VEO3.1I2VFAST", "basePrice": 450 },
+    { "label": "VEO3.1I2V", "value": "VEO3.1I2V", "basePrice": 1050 },
+    { "label": "SORA2", "value": "SORA2", "basePrice": 150 }
+  ]
+}
+```
+
+- `IMAGE_MODELS` and `VIDEO_MODELS` are generated from express-enabled model entries on the server (`isExpressModel: true`).
+- Each item includes `label` (display text), `value` (request key), and `basePrice` (lowest configured per-unit price for that model).
+- Use each item’s `value` directly as `image_model` and `video_model` in `POST /video/text_to_video`.
+- This endpoint does not require authentication.
+
+## POST /video/text_to_video
+
+Submit a prompt-only request to start video generation. Webhooks are optional.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "prompt": "Required text, max 1000 chars",
+    "image_model": "GPTIMAGE1 | IMAGEN4 | SEEDREAM | HUNYUAN | NANOBANANA",
+    "video_model": "RUNWAYML | KLINGIMGTOVID3PRO | HAILUO | HAILUOPRO | SEEDANCEI2V | VEO3.1I2V | VEO3.1I2VFAST | SORA2 | SORA2PRO",
+    "duration": 30,
+    "tone": "grounded | cinematic",
+    "aspect_ratio": "16:9 | 9:16",
+    "language": "auto | en | es | fr | de | pt | it | nl | sv | hi | ar | ru | ja | ko | th | zh",
+    "enable_subtitles": true,
+    "font_key": "Poppins"
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `prompt`, `image_model`, `video_model`, `duration` are required; `duration` ≤ 240 seconds.
+- `language` is optional; pass `auto` (default) or one of the listed language codes.
+- `enable_subtitles` optional; defaults to `true`. Set to `false` to skip subtitle generation entirely.
+- `font_key` optional; must be supported for the chosen `language`. It sets both subtitle and speaker fonts. Use `GET /supported_fonts` or [/fonts](/fonts) to preview choices.
+- Request bodies can be nested under `input` (recommended) or sent as a flat JSON payload.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/text_to_video \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "prompt": "A timelapse of clouds over a futuristic city at sunrise",
+      "duration": 30,
+      "image_model": "IMAGEN4",
+      "video_model": "RUNWAYML",
+      "tone": "grounded",
+      "aspect_ratio": "16:9",
+      "language": "en",
+      "enable_subtitles": false,
+      "font_key": "Poppins"
+    }
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_a1b2c3d4",
+  "session_id": "vid_a1b2c3d4"
+}
+```
+
+**Error responses**
+
+- `400` invalid or missing fields (empty prompt, unsupported models, duration > 240, etc.)
+- `401` invalid API key
+
+## POST /video/image_list_to_video
+
+Create a video from an ordered list of images. Samsar builds a narrative from the images and optional metadata, then renders the video using a fixed Veo2.1 pipeline model (`VEO3.1I2V`, `16:9`, grounded tone).
+
+**Request body**
+
+```json
+{
+  "input": {
+    "image_urls": [
+      "https://cdn.example.com/frame1.png",
+      "https://cdn.example.com/frame2.png"
+    ],
+    "prompt": "Optional high-level direction",
+    "metadata": { "project": "launch_trailer" },
+    "language": "auto | en | es | fr | de | pt | it | nl | sv | hi | ar | ru | ja | ko | th | zh",
+    "enable_subtitles": true,
+    "font_key": "Poppins",
+    "outro_image_url": "https://cdn.example.com/outro.png",
+    "add_outro_animation": false,
+    "add_outro_focus_area": false,
+    "outro_focust_area": { "x": 200, "y": 120, "width": 800, "height": 450 }
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `image_urls` required; non-empty array of URLs.
+- `metadata` optional plain object forwarded into the narrative builder.
+- `prompt` optional text used to guide pacing/tone.
+- This endpoint currently uses a fixed Veo2.1 pipeline video model: `VEO3.1I2V` (no `video_model` override).
+- `language` optional; defaults to `auto` for detection.
+- `enable_subtitles` optional; defaults to `true`. Set to `false` to skip subtitle generation entirely.
+- `font_key` optional; must be supported for the chosen `language`. It sets both subtitle and speaker fonts.
+- `outro_image_url` optional; appends a custom outro frame if provided.
+- When `outro_image_url` is provided, a `0.5s` fade-in transition of the outro image is also applied at the end of the prior layer before the final outro layer starts.
+- `add_outro_animation` optional; when true, applies a fade-to-black overlay during the outro.
+- `add_outro_focus_area` optional; requires `add_outro_animation` and a valid `outro_focust_area`.
+- `outro_focust_area` optional; `{ x, y, width, height }` within the output canvas (default `16:9` is `1792x1024`).
+- Credits are billed at **75 credits/sec** using the render duration that results from the provided images/metadata.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/image_list_to_video \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "image_urls": [
+        "https://cdn.example.com/frame1.png",
+        "https://cdn.example.com/frame2.png"
+      ],
+      "prompt": "Make this feel like a fast-paced teaser",
+      "metadata": { "project": "launch_trailer" },
+      "language": "en",
+      "enable_subtitles": false,
+      "font_key": "Poppins",
+      "outro_image_url": "https://cdn.example.com/outro.png",
+      "add_outro_animation": true,
+      "add_outro_focus_area": true,
+      "outro_focust_area": { "x": 240, "y": 140, "width": 720, "height": 420 }
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_img_a1b2c3",
+  "session_id": "vid_img_a1b2c3"
+}
+```
+
+**Error responses**
+
+- `400` invalid or missing `image_urls`.
+- `401` invalid API key.
+
+## POST /video/add_outro_image
+
+Clone an existing session, then add or replace the outro image in the cloned session and queue frame/video generation.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4",
+    "outro_image_url": "https://cdn.example.com/outro.png",
+    "add_outro_animation": true,
+    "add_outro_focus_area": true,
+    "outro_focust_area": { "x": 240, "y": 140, "width": 720, "height": 420 }
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `videoSessionId` required; must belong to the API key.
+- `outro_image_url` required; URL (or data URL) for the outro image.
+- `add_outro_animation` optional boolean; when true, adds a fade-to-black overlay in the final outro layer.
+- `add_outro_focus_area` optional boolean; requires `add_outro_animation` and valid `outro_focust_area`.
+- `outro_focust_area` optional; `{ x, y, width, height }`, validated against the session canvas.
+- Behavior:
+  - If the last layer is already the outro, it replaces that outro.
+  - If the last layer is not an outro, it appends a new outro layer.
+  - In both cases, a `0.5s` fade-in transition of the outro image is applied to the end of the prior layer so it leads into the outro start frame.
+- Credits are billed at **75 credits per request**.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/add_outro_image \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "outro_image_url": "https://cdn.example.com/outro.png",
+      "add_outro_animation": true,
+      "add_outro_focus_area": true,
+      "outro_focust_area": { "x": 240, "y": 140, "width": 720, "height": 420 }
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_outro_a1b2c3",
+  "session_id": "vid_outro_a1b2c3"
+}
+```
+
+**Error responses**
+
+- `400` invalid or missing fields.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `404` session not found.
+
+## POST /video/translate_video
+
+Translate an existing video session into a new language. This creates a new session and runs only the required stages (lip sync, transcription, final render) to produce a translated video.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4",
+    "language": "en | es | fr | ja | th | zh | bn | hi | sa | la",
+    "outro_image_url": "https://cdn.example.com/outro.png"
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `videoSessionId` required; must be a video session that belongs to the API key.
+- `language` required; pass a supported language code.
+- `outro_image_url` optional; when provided, replaces the existing outro image in the cloned session.
+- Credits are billed at **3 credits/sec** using the duration of the source session.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/translate_video \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "language": "es",
+      "outro_image_url": "https://cdn.example.com/outro.png"
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_tr_a1b2c3",
+  "session_id": "vid_tr_a1b2c3"
+}
+```
+
+**Error responses**
+
+- `400` invalid/missing fields (unknown session id, unsupported language, etc.)
+- `401` invalid API key
+- `402` insufficient credits
+
+## POST /video/join_videos
+
+Join multiple completed video sessions into a single session by appending their timelines in order. This creates a new session and queues transcription, frame generation, and final render to produce the joined video.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "session_ids": ["vid_a1b2c3d4", "vid_e5f6g7h8"],
+    "blend_scenes": true
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `session_ids` required; array of **2+** unique video session ids.
+- `blend_scenes` optional boolean (default `false`). When `true`, joins apply scene-boundary blending:
+  previous outro image is carried into the next scene with a 1s fade-out, and background music layers are adjusted around boundaries (`+0.5s`) for smoother transitions.
+- All sessions must belong to the API key, and must have the same `aspect_ratio` and `framesPerSecond`.
+- Credits are billed at **3 credits/sec** using the joined duration (sum of session durations).
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/join_videos \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "session_ids": ["vid_a1b2c3d4", "vid_e5f6g7h8"],
+      "blend_scenes": true
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_join_a1b2c3",
+  "session_id": "vid_join_a1b2c3"
+}
+```
+
+**Error responses**
+
+- `400` invalid/missing fields (unknown session id, incompatible sessions, etc.)
+- `401` invalid API key
+- `402` insufficient credits
+- `404` one or more sessions not found
+
+## POST /video/remove_subtitles
+
+Clone an existing session, remove all subtitle/transcript text overlays (`type: "text"` items in layer `activeItemList`), and queue only frame + video generation for the new session.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4"
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `videoSessionId` required; must be a video session that belongs to the API key.
+- Creates a new `session_id`; the source session remains unchanged.
+- The cloned session is configured to skip transcription and other generation stages, and run only frame/video generation.
+- This endpoint currently does not charge additional credits.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/remove_subtitles \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4"
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_nosub_a1b2c3",
+  "session_id": "vid_nosub_a1b2c3"
+}
+```
+
+**Error responses**
+
+- `400` invalid/missing fields (invalid session id format, missing session id, etc.)
+- `401` invalid API key
+- `404` session not found
+
+## POST /video/cancel_render
+
+Cancel an in-progress render for an existing session. This sets the session to a cancelled state and stops queued render tasks for that session.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4"
+  }
+}
+```
+
+- `videoSessionId` required; must belong to the API key.
+- This endpoint does not create a new session.
+- This endpoint currently does not charge additional credits.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/cancel_render \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4"
+    }
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_a1b2c3d4",
+  "session_id": "vid_a1b2c3d4",
+  "status": "CANCELLED",
+  "cancelled": true,
+  "message": "Render cancellation requested."
+}
+```
+
+**Error responses**
+
+- `400` invalid/missing session id
+- `401` invalid API key
+- `404` session not found
+
+## GET /video/fetch_latest_version
+
+Fetch the latest available render URL for a given video `session_id`.
+
+**Request**
+
+```bash
+curl "https://api.samsar.one/v1/video/fetch_latest_version?session_id=vid_a1b2c3d4" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Completed (200)**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "result_url": "https://cdn.samsar.one/videos/vid_a1b2c3d4.mp4"
+}
+```
+
+**Pending (202)**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "status": "PENDING",
+  "message": "Render not ready yet."
+}
+```
+
+**Failed (200)**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "status": "FAILED",
+  "message": "Video generation failed."
+}
+```
+
+**Cancelled (200)**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "status": "CANCELLED",
+  "message": "Render was cancelled."
+}
+```
+
+**Error responses**
+
+- `400` missing/invalid `session_id`
+- `401` invalid API key
+- `403` session does not belong to the API key
+- `404` session not found
+
+## GET /video/list_completed_video_sessions
+
+List completed video sessions for the authenticated API key, including each session language and final URL.
+
+**Request**
+
+```bash
+curl "https://api.samsar.one/v1/video/list_completed_video_sessions" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+Optional query params:
+
+- `limit` (number): maximum number of sessions to return (server-capped to `5000`).
+
+**Success response (200)**
+
+```json
+[
+  {
+    "session_id": "vid_a1b2c3d4",
+    "langauge": "en",
+    "result_url": "https://static.samsar.one/video/vid_a1b2c3d4/final.mp4"
+  },
+  {
+    "session_id": "vid_e5f6g7h8",
+    "langauge": "es",
+    "result_url": "https://static.samsar.one/video/vid_e5f6g7h8/final.mp4"
+  }
+]
+```
+
+- Returns only sessions that have a final video URL available.
+- `langauge` is returned as a normalized language code (lowercase).
+
+**Error responses**
+
+- `400` missing API key/auth header
+- `401` invalid API key
+
+## GET /status
+
+Poll the status for any `request_id` returned by the video endpoints (or `/image/*` endpoints).
+
+**Request**
+
+```bash
+curl "https://api.samsar.one/v1/status?request_id=vid_a1b2c3d4" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Queued / processing**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "request_id": "vid_a1b2c3d4",
+  "status": "PENDING",
+  "type": "video",
+  "provider": "RUNWAYML",
+  "expressGenerationStatus": {
+    "prompt_generation": "PENDING",
+    "video_generation": "IN_PROGRESS"
+  }
+}
+```
+
+**Completed**
+
+```json
+{
+  "session_id": "vid_a1b2c3d4",
+  "request_id": "vid_a1b2c3d4",
+  "status": "COMPLETED",
+  "type": "video",
+  "provider": "RUNWAYML",
+  "result_url": "https://cdn.samsar.one/videos/vid_a1b2c3d4.mp4",
+  "result_urls": [
+    "https://cdn.samsar.one/videos/vid_a1b2c3d4.mp4"
+  ],
+  "videoLink": "https://cdn.samsar.one/videos/vid_a1b2c3d4.mp4",
+  "remoteURL": "https://cdn.samsar.one/videos/vid_a1b2c3d4.mp4"
+}
+```
+
+- `result_urls` may be present when multiple assets are produced; `videoLink` or `remoteURL` can also contain the download URL.
+- `expressGenerationStatus` is present while individual stages are running; `expressGenerationError`/`message` is present on failure.
+- `404` is returned when the `request_id` is unknown; `401` when the API key is invalid.
+
+## GET /supported_fonts
+
+Fetch the supported subtitle fonts by language code. Use this to validate `font_key` or text overlay choices before submitting video requests. This endpoint does not require authentication.
+
+**Request**
+
+```bash
+curl "https://api.samsar.one/v1/supported_fonts"
+```
+
+**Success response (200)**
+
+```json
+{
+  "fontsByLanguage": {
+    "default": ["Rampart One", "Montserrat", "Arial", "sans-serif"],
+    "en": ["Poppins", "Montserrat", "Arial", "sans-serif"],
+    "ja": ["Noto Sans JP", "M PLUS Rounded 1c", "Hiragino Sans", "Yu Gothic UI", "sans-serif"],
+    "ko": ["Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "sans-serif"]
+  }
+}
+```
+
+- `default` is used when a language code has no explicit mapping.
+- Font previews: visit [`/fonts`](/fonts) for light/dark samples with keys.

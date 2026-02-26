@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunksamsar_docs=self.webpackChunksamsar_docs||[]).push([[634],{9179:(s,r,a)=>{a.r(r),a.d(r,{default:()=>u});a(6540);var e=a(6347),t=a(4848);function u(){return(0,t.jsx)(e.rd,{to:"/intro"})}}}]);

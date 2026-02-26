@@ -1,0 +1,430 @@
+---
+title: Image API
+description: Edit, enhance, and manage images with the /image endpoints.
+sidebar_position: 2
+slug: /image-api
+sidebar_label: Image API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+import PlaygroundRail from '@site/src/components/PlaygroundRail';
+
+# Image API
+
+<DocTopActions />
+
+<PlaygroundRail
+  endpointLabel="Image endpoints"
+  href="https://samsar.one/playground/image"
+>
+  Run enhance or branding removal calls in the Playground and poll their status before wiring them into code.
+</PlaygroundRail>
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+- Responses include `x-credits-charged` and `x-credits-remaining` when credits are deducted.
+- All endpoints enqueue work; poll `/image/status?request_id=...` (or `/v1/status`) for completion, or use `/image/list` to fetch history.
+
+## Pricing
+
+| Endpoint                 | Credits                                           | Notes                                                         |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------------- |
+| `POST /image/enhance`    | 45 (`1k`) / 75 (`2k`) / 90 (`4k`)                   | Based on `resolution` (defaults to `1k`).                     |
+| `POST /image/remove_branding` | 75                                          | White label images and remove branding for marketplace listing. |
+| `POST /image/add_image_set` | `75 × requested_images`                        | `requested_images = num_images` (if provided) else `image_urls.length`. |
+| `POST /image/create_rollup_banner` | 30                                        | Flat per request.                                              |
+| `POST /image/create_rollup_banner_with_enhance` | Variable                               | Enhance credits for low-res images + 30 credits per rollup request. |
+
+## POST /image/enhance
+
+Upscale and denoise an image.
+
+**Request body**
+
+```json
+{
+  "image_url": "https://cdn.example.com/photo.png",
+  "resolution": "1k | 2k | 4k"
+}
+```
+
+- `image_url` required, non-empty URL.
+- `resolution` optional; defaults to `1k`.
+
+**Success response (200)**
+
+```json
+{
+  "status": "queued",
+  "request_id": "img_enh_123",
+  "session_id": "img_enh_123",
+  "global_status_id": "img_enh_123",
+  "case_type": "image_enhance",
+  "image_url": "https://cdn.example.com/photo.png",
+  "resolution": "1K",
+  "aspect_ratio": "16:9",
+  "creditsCharged": 45,
+  "remainingCredits": 4955
+}
+```
+
+## POST /image/remove_branding
+
+Remove a watermark or logo.
+
+**Request body**
+
+```json
+{
+  "image_url": "https://cdn.example.com/watermarked.png"
+}
+```
+
+**Success response (200)**
+
+```json
+{
+  "status": "queued",
+  "request_id": "img_rm_123",
+  "session_id": "img_rm_123",
+  "global_status_id": "img_rm_123",
+  "case_type": "logo_remove",
+  "image_url": "https://cdn.example.com/watermarked.png",
+  "creditsCharged": 75,
+  "remainingCredits": 4925
+}
+```
+
+## POST /image/add_image_set
+
+Extend or save a set of images for downstream generation.
+
+**Request body**
+
+```json
+{
+  "image_urls": [
+    "https://cdn.example.com/look1.png",
+    "https://cdn.example.com/look2.png"
+  ],
+  "metadata": { "campaign": "spring" },
+  "prompt": "Optional creative direction",
+  "num_images": 4
+}
+```
+
+- `image_urls` required, non-empty array of strings.
+- `num_images` optional positive number; defaults to `image_urls.length` when omitted.
+- `prompt` optional string; `metadata` optional object.
+
+**Success response (200)**
+
+```json
+{
+  "status": "queued",
+  "request_id": "img_set_123",
+  "session_id": "img_set_123",
+  "global_status_id": "img_set_123",
+  "case_type": "image_list_to_image_set",
+  "image_urls": [
+    "https://cdn.example.com/look1.png",
+    "https://cdn.example.com/look2.png"
+  ],
+  "metadata": { "campaign": "spring" },
+  "prompt": "Optional creative direction",
+  "num_images": 4,
+  "creditsCharged": 300,
+  "remainingCredits": 4700
+}
+```
+
+## GET /image/status
+
+Check the latest state for a single image request (accepts `request_id` or `session_id`).
+
+```bash
+curl "https://api.samsar.one/v1/image/status?request_id=img_enh_123" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Queued / processing**
+
+```json
+{
+  "session_id": "img_enh_123",
+  "request_id": "img_enh_123",
+  "status": "PENDING",
+  "type": "image",
+  "provider": "NANOBANANA",
+  "case_type": "image_enhance"
+}
+```
+
+**Completed**
+
+```json
+{
+  "session_id": "img_enh_123",
+  "request_id": "img_enh_123",
+  "status": "COMPLETED",
+  "type": "image",
+  "provider": "NANOBANANA",
+  "case_type": "image_enhance",
+  "result_url": "https://cdn.samsar.one/images/img_enh_123.png"
+}
+```
+
+- `result_urls` is present when multiple assets are produced.
+- `thumbnail_url` is included for rollup banner completions and points to a downscaled preview.
+- A `404` is returned if the request does not belong to your API key or is unknown.
+
+## GET /image/list
+
+Fetch a list of your recent image API sessions, including their current status and any available results. Use `limit` (max 500) to trim the response.
+
+```bash
+curl "https://api.samsar.one/v1/image/list?limit=50" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Response (200)**
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "img_rm_123",
+      "request_id": "img_rm_123",
+      "status": "COMPLETED",
+      "type": "image",
+      "provider": "NANOBANANA",
+      "case_type": "logo_remove",
+      "request_type": "API",
+      "result_url": "https://cdn.samsar.one/images/img_rm_123.png",
+      "created_at": "2024-08-20T08:10:11.000Z",
+      "updated_at": "2024-08-20T08:12:42.000Z"
+    },
+    {
+      "session_id": "img_set_987",
+      "request_id": "img_set_987",
+      "status": "PENDING",
+      "type": "image",
+      "provider": "NANOBANANA",
+      "case_type": "image_list_to_image_set",
+      "request_type": "API",
+      "created_at": "2024-08-20T08:15:55.000Z",
+      "updated_at": "2024-08-20T08:15:55.000Z"
+    }
+  ]
+}
+```
+
+**Common errors**
+
+- `400` invalid or missing fields (empty URLs, bad resolution, non-numeric `num_images`).
+- `401` invalid API key.
+- `402` insufficient credits.
+- `404` unknown `request_id` (or a request that does not belong to the API key on `/image/status`).
+
+## Utils
+
+### POST /image/create_rollup_banner_with_enhance
+
+Enhance low-resolution tiles (if needed) and generate a rollup banner. Images below the rollup minimum (2020x2526) are auto-upscaled using `1k`/`2k`/`4k`, then the list is expanded to 28 tiles before rendering.
+
+**Request body**
+
+```json
+{
+  "images": [
+    {
+      "image_url": "https://cdn.example.com/tile-1.png",
+      "image_text": "Rooftop Bar",
+      "image_category": "Social",
+      "overlay": { "top_left": "2 hours", "top_right": "City", "footer": "Rooftop Bar" }
+    }
+  ],
+  "header_image_url": "https://cdn.example.com/header.png",
+  "footer_image_url": "https://cdn.example.com/footer.png",
+  "columns": 4,
+  "max_tiles": 28,
+  "image_tiling_position": {
+    "font_key": "en",
+    "font_family": "Poppins, Helvetica, Arial, sans-serif",
+    "top_left": {
+      "margin_min": 28,
+      "margin_ratio": 0.02,
+      "diameter_min": 220,
+      "diameter_max": 320,
+      "diameter_ratio": 0.215,
+      "inner_padding_min": 12,
+      "inner_padding_ratio": 0.08
+    },
+    "top_right": {
+      "margin_min": 28,
+      "margin_ratio": 0.02,
+      "max_width_floor": 260,
+      "min_width": 220,
+      "padding_left": 36,
+      "padding_right": 48,
+      "padding_top": 30,
+      "padding_bottom": 24,
+      "overlay_height_min": 140
+    },
+    "bottom": {
+      "inset_min": 32,
+      "inset_ratio": 0.03,
+      "offset_min": 12,
+      "offset_ratio": 0.02,
+      "container_margin_min": 40,
+      "container_margin_ratio": 0.08,
+      "text_inset_min": 18,
+      "text_inset_ratio": 0.04,
+      "overlay_height_min": 280
+    }
+  }
+}
+```
+
+- `images` (or `image_list`/`image_urls`) required, non-empty array.
+- Items accept `image_url` (or `enhanced_url`) plus optional `image_text`, `image_category`, `image_duration`, `overlay`.
+- `columns` optional integer 1-6; defaults to 4.
+- `max_tiles` optional integer; defaults to 28.
+- `header_image_url` and `footer_image_url` optional.
+- `image_tiling_position` optional object for tile overlay layout and font overrides. Omit to use defaults.
+
+**image_tiling_position (optional)**
+
+Overrides for per-tile overlay placement and font selection. You can send only the fields you want to change.
+
+- `font_key` required if provided; must match a supported subtitle language key (e.g., `en`, `fr`, `es`, `ja`, `ko`, `zh-cn`, `zh-tw`, `hi`, `ar`).
+- `font_family` optional; comma-separated stack. The first font must be supported for the chosen `font_key`.
+- `top_left` optional object for the circular badge.
+  - `margin_min`, `margin_ratio`
+  - `diameter_min`, `diameter_max`, `diameter_ratio`
+  - `inner_padding_min`, `inner_padding_ratio`
+- `top_right` optional object for the top-right label.
+  - `margin_min`, `margin_ratio`
+  - `max_width_floor`, `min_width`
+  - `padding_left`, `padding_right`, `padding_top`, `padding_bottom`
+  - `overlay_height_min`
+- `bottom` optional object for the footer label.
+  - `inset_min`, `inset_ratio`
+  - `offset_min`, `offset_ratio`
+  - `container_margin_min`, `container_margin_ratio`
+  - `text_inset_min`, `text_inset_ratio`
+  - `overlay_height_min`
+
+All `*_ratio` values are fractions between 0 and 1. Values are validated; invalid ranges return `400`.
+
+**Success response (200)**
+
+```json
+{
+  "status": "completed",
+  "session_id": "rollup_enh_123",
+  "request_id": "rollup_enh_123",
+  "rollup_session_id": "rollup_456",
+  "rollup_request_id": "rollup_456",
+  "case_type": "rollup_banner_enhance",
+  "result_url": "https://cdn.samsar.one/rollups/rollup_456.png",
+  "thumbnail_url": "https://cdn.samsar.one/rollups/rollup_456-thumb.png",
+  "result_urls": ["https://cdn.samsar.one/rollups/rollup_456.png"],
+  "input_image_urls": [
+    "https://cdn.example.com/tile-1-enhanced.png"
+  ],
+  "creditsCharged": 180,
+  "remainingCredits": 4820
+}
+```
+
+Poll `/image/status?request_id=rollup_enh_123` for completion. The status payload includes `case_type: rollup_banner_enhance`.
+`input_image_urls` returns the enhanced URLs used for the rollup request (falls back to original URLs when no enhancement was needed), before any duplication to 28 tiles.
+
+### POST /image/create_rollup_banner
+
+Generate a rollup banner image from a list of tiles, with optional header/footer imagery.
+
+**Request body**
+
+```json
+{
+  "image_list": [
+    {
+      "image_url": "https://cdn.example.com/tile-1.png",
+      "title": "Rooftop Bar",
+      "image_category": "Social",
+      "image_duration": "2 hours"
+    },
+    {
+      "enhanced_url": "https://cdn.example.com/tile-2.png",
+      "overlay": { "top_left": "Half day", "top_right": "Pool", "footer": "Cabana" }
+    }
+  ],
+  "header_image_url": "https://cdn.example.com/header.png",
+  "footer_image_url": "https://cdn.example.com/footer.png",
+  "columns": 4,
+  "max_tiles": 28,
+  "image_tiling_position": {
+    "font_key": "en",
+    "font_family": "Poppins, Helvetica, Arial, sans-serif",
+    "top_left": {
+      "margin_min": 28,
+      "margin_ratio": 0.02,
+      "diameter_min": 220,
+      "diameter_max": 320,
+      "diameter_ratio": 0.215,
+      "inner_padding_min": 12,
+      "inner_padding_ratio": 0.08
+    },
+    "top_right": {
+      "margin_min": 28,
+      "margin_ratio": 0.02,
+      "max_width_floor": 260,
+      "min_width": 220,
+      "padding_left": 36,
+      "padding_right": 48,
+      "padding_top": 30,
+      "padding_bottom": 24,
+      "overlay_height_min": 140
+    },
+    "bottom": {
+      "inset_min": 32,
+      "inset_ratio": 0.03,
+      "offset_min": 12,
+      "offset_ratio": 0.02,
+      "container_margin_min": 40,
+      "container_margin_ratio": 0.08,
+      "text_inset_min": 18,
+      "text_inset_ratio": 0.04,
+      "overlay_height_min": 280
+    }
+  }
+}
+```
+
+- `image_list` (or `images`) required, non-empty array. Each item must include `image_url` or `enhanced_url`.
+- `overlay` optional; supports `top_left`, `top_right`, `footer` (fallbacks: `title`, `image_text`, `image_category`, `image_duration`).
+- `columns` optional integer 1-6; defaults to 4.
+- `max_tiles` optional integer; defaults to 28.
+- `header_image_url` and `footer_image_url` optional.
+- `image_tiling_position` optional object for tile overlay layout and font overrides. Omit to use defaults.
+
+**image_tiling_position (optional)**
+
+Same schema and validation as `/image/create_rollup_banner_with_enhance`. See details above.
+
+**Success response (200)**
+
+```json
+{
+  "status": "completed",
+  "session_id": "rollup_123",
+  "request_id": "rollup_123",
+  "result_url": "https://cdn.samsar.one/rollups/rollup_123.png",
+  "thumbnail_url": "https://cdn.samsar.one/rollups/rollup_123-thumb.png",
+  "result_urls": ["https://cdn.samsar.one/rollups/rollup_123.png"],
+  "creditsCharged": 30,
+  "remainingCredits": 4970
+}
+```

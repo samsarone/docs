@@ -1,0 +1,778 @@
+LLM_EXPORT_VERSION: 1
+GENERATED_AT_UTC: 2025-10-24T05:43:05.697777Z
+DOC_COUNT: 4
+
+=== DOCUMENT START ===
+SOURCE_PATH: docs/api.mdx
+METADATA:
+  title: API Docs
+  description: API Docs for using our API.
+  sidebar_position: 1
+PRIMARY_HEADING: API Docs
+CONTENT_START
+---
+title: API Docs
+description: API Docs for using our API.
+sidebar_position: 1
+---
+
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+<div className="margin-bottom--lg">
+  <a className="button button--primary button--lg" href={useBaseUrl('/llms.txt')} download>
+    Download docs for LLMs
+  </a>
+</div>
+
+# API Docs
+
+## Base URL
+
+`https://api.samsar.one/v1/video/`
+
+---
+
+## Authentication
+
+> **Header (required)**
+>
+> `Authorization: Bearer YOUR_API_KEY`
+>
+> Create and manage API keys in your dashboard. Register for an account and create an API key from account settings [here](https://app.samsar.one).
+
+| Code | Reason                            |
+| ---- | --------------------------------- |
+| 400  | Missing or empty `API_KEY` header |
+| 401  | Invalid `API_KEY`                 |
+
+---
+
+## Supported Models
+
+### Image Models
+
+| Name        | Key          |
+| ----------- | ------------ |
+| GPT Image 1 | `GPTIMAGE1`  |
+| Imagen 4    | `IMAGEN4`    |
+| Seedream    | `SEEDREAM`   |
+| NanoBanana  | `NANOBANANA` |
+| Hunyuan V3  | `HUNYUAN`    |
+
+### Video Models
+
+| Name                   | Key                  |
+| ---------------------- | -------------------- |
+| Runway Gen-4 (Default) | `RUNWAYML`           |
+| SeeDance I2V           | `SEEDANCEI2V`        |
+| Hailuo Img2Vid         | `HAILUO`             |
+| Hailuo Pro             | `HAILUOPRO`          |
+| Wani I2V               | `WANI2V`             |
+| Wani I2V 5B            | `WANI2V5B`           |
+| Veo3.1 I2V             | `VEO3.1I2V`          |
+| Veo3.1 I2V Fast        | `VEO3.1I2VFAST`      |
+| Kling I2V Turbo Pro    | `KLINGIMGTOVIDTURBO` |
+| Sora 2                 | `SORA2`              |
+| Sora 2 Pro             | `SORA2PRO`           |
+
+---
+
+## Pricing
+
+### Per-second rates
+
+| Model / Item        | Credits / sec | Notes                                             |
+| ------------------- | ------------: | ------------------------------------------------- |
+| Default (all other) |            10 | Base rate for most video generation models.       |
+| Kling I2V Turbo Pro |            15 | Kling I2V 2.5 SoTA model.                         |
+| Veo3.1 I2V Fast     |            30 | Higher-tier accelerated model.                    |
+| Sora 2              |            30 | Advanced Sora model with fast turnaround.         |
+| Veo3.1 I2V          |            60 | Premium Veo3 model with higher fidelity.          |
+| Sora 2 Pro          |            70 | Highest fidelity Sora with extended capabilities. |
+
+#### Image-model multiplier
+
+If you select the Hunyuan image model, a multiplier applies to the video rate:
+
+* **Hunyuan (`HUNYUAN`)**: ×1.5 on the per-second video rate
+
+#### Effective credits formula
+
+```
+effective_credits = duration_seconds
+                  × video_rate_credits_per_sec
+                  × (image_model == HUNYUAN ? 1.5 : 1)
+```
+
+**Example**
+
+60-second video with `KLINGIMGTOVIDTURBO` (15 cr/s)
+
+* With `SEEDREAM`: `60 × 15 × 1 = 900` credits
+* With `HUNYUAN`: `60 × 15 × 1.5 = 1,350` credits
+
+### Subscription plan
+
+| Plan                                                                        |    Included credits / mo | Notes          |
+| --------------------------------------------------------------------------- | -----------------------: | -------------- |
+| Creator Plan                                                                | $49.99 **5 000 credits** | Billed monthly |
+| Individual credits can also be purchased from the website $10/1000 credits. |                          |                |
+
+---
+
+## Endpoints
+
+### POST `/create`
+
+Creates a new video-generation session.
+
+#### Request Body Parameters
+
+| Field          | Type & Constraints                                                                                                                                                              | Required | Default     | Description                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------- | ------------------------------------------------- |
+| `prompt`       | `string` (≤ **1000** characters)                                                                                                                                                | **Yes**  | —           | Text prompt that drives image & video generation. |
+| `duration`     | `number` seconds (≤ **180**)                                                                                                                                                    | No       | `30`        | Desired video length.                             |
+| `image_model`  | `string` one of: `GPTIMAGE1` | `IMAGEN4` | `SEEDREAM` | `NANOBANANA` | `HUNYUAN`                                                                                                | No       | `GPTIMAGE1` | Key for the underlying image-generation model.    |
+| `video_model`  | `string` one of: `RUNWAYML` | `SEEDANCEI2V` | `HAILUO` | `HAILUOPRO` | `WANI2V` | `WANI2V5B` | `VEO3.1I2V` | `VEO3.1I2VFAST` | `KLINGIMGTOVIDTURBO` | **`SORA2`** | **`SORA2PRO`** | No       | `RUNWAYML`  | Key for the video-synthesis engine.               |
+| `tone`         | `string` `grounded` | `cinematic`                                                                                                                                               | No       | `grounded`  | Overall stylistic tone of the output.             |
+| `aspect_ratio` | `string` `9:16` | `16:9`                                                                                                                                                        | No       | `16:9`      | Aspect ratio of the result                        |
+
+#### Example Request
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/create \
+  -H "Authorization: Bearer 74c4bbbee28e7e221330e48c2cdd897acad510" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "prompt": "An astronaut cat exploring a neon-lit Mars colony",
+      "duration": 30,
+      "image_model": "IMAGEN4",
+      "video_model": "SORA2",
+      "tone": "grounded",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+#### Successful Response
+
+```json
+{
+  "request_id": "vid_1234567890"
+}
+```
+
+| Code | Reason               |
+| ---- | -------------------- |
+| 201  | Session created      |
+| 400  | Validation error     |
+| 401  | Authentication error |
+
+#### Failure Response (Example)
+
+```json
+{
+  "message": "Invalid movie prompt."
+}
+```
+
+---
+
+### GET `/status`
+
+Fetches the current state of a generation session.
+
+#### Query Parameters
+
+| Param        | Type   | Required | Description                       |
+| ------------ | ------ | -------- | --------------------------------- |
+| `request_id` | string | **Yes**  | Identifier returned by `/create`. |
+
+#### Example Request
+
+```bash
+curl -X GET "https://api.samsar.one/v1/video/status?request_id=vid_1234567890" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+#### Possible Responses
+
+| Scenario                 | Example Payload                                                        | Code |
+| ------------------------ | ---------------------------------------------------------------------- | ---- |
+| **Processing / Pending** | See below                                                              | 200  |
+| **Completed**            | `{ "video_link": "https://cdn.samsar.one/videos/vid_1234567890.mp4" }` | 200  |
+| **Invalid request**      | `{ "message": "Missing or invalid session_id." }`                      | 400  |
+| **Not found**            | —                                                                      | 404  |
+| **Authentication error** | —                                                                      | 401  |
+
+##### Pending Payload Structure
+
+```json
+{
+  "status": "PENDING",
+  "details": {
+    "prompt_generation": "COMPLETED",
+    "image_generation": "COMPLETED",
+    "audio_generation": "COMPLETED",
+    "frame_generation": "INIT",
+    "video_generation": "INIT",
+    "ai_video_generation": "PENDING",
+    "speech_generation": "COMPLETED",
+    "music_generation": "COMPLETED",
+    "lip_sync_generation": "INIT",
+    "sound_effect_generation": "INIT",
+    "transcript_generation": "INIT"
+  }
+}
+```
+
+##### Success Payload Structure
+
+```json
+{
+  "status": "COMPLETED",
+  "url": "https://cdn.samsar.one/videos/vid_1234567890.mp4"
+}
+```
+
+---
+
+### Notes on Pricing Calculation (for reference)
+
+Your internal calculation (credits) aligns with the table above:
+
+```js
+// Pseudocode equivalence:
+//
+// perSec = 0.1 (default)
+// VEO3.1I2VFAST => 0.3
+// VEO3.1I2V => 0.6
+// KLINGIMGTOVIDTURBO => 0.15
+// SORA2 => 0.3
+// SORA2PRO => 0.7
+// if HUNYUAN image model => ×1.5
+// totalCredits = durationSeconds * perSec * 100 * (HUNYUAN ? 1.5 : 1)
+```
+CONTENT_END
+=== DOCUMENT END ===
+
+=== DOCUMENT START ===
+SOURCE_PATH: docs/intro.md
+CONTENT_START
+CONTENT_END
+=== DOCUMENT END ===
+
+=== DOCUMENT START ===
+SOURCE_PATH: docs/pricing.md
+METADATA:
+  title: Pricing (Models & Plans)
+  description: Complete credit pricing for every model and operation across VidGenie Agent, Studio Creator, Express Narrative Creator, and more.
+  sidebar_position: 3
+PRIMARY_HEADING: Pricing Chart
+CONTENT_START
+---
+
+title: "Pricing (Models & Plans)"
+description: "Complete credit pricing for every model and operation across VidGenie Agent, Studio Creator, Express Narrative Creator, and more."
+sidebar_position: 3
+-------------------
+
+
+# Pricing Chart
+
+We now have a single payment plan that can be used by **all** customers.
+
+| Plan               | Monthly Fee     | Credits Included  | Extra Credits         |
+| ------------------ | --------------- | ----------------- | --------------------- |
+| **Creator’s Plan** | **$49.99 / mo** | **5,000 credits** | $10 per 1,000 credits |
+
+> Need more? Buy as many additional credits as you like at any time.
+
+---
+
+## 1. VidGenie Pricing
+
+VidGenie is generally billed **per-second** of generated video.
+Check API page for pricing.
+
+---
+
+## 2. Studio Creator Pricing
+
+Studio Creator also uses the per-model credit cost tables in [§ 3](#3-model-prices).
+
+---
+
+## 3. Model Prices
+
+### 3.1 Image Model Prices
+
+| **Model Key**    | **Aspect Ratio**  | **Price (cr)** |
+| ---------------- | ----------------- | -------------- |
+| **DALLE3**       | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **DALLE3HD**     | 1:1 / 16:9 / 9:16 | 15 / 18 / 18   |
+| **FLUX1PRO**     | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **FLUX1.1PRO**   | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **FLUX1DEV**     | 1:1 / 16:9 / 9:16 | 5 / 10 / 10    |
+| **FLUX1.1ULTRA** | 1:1 / 16:9 / 9:16 | 12 / 16 / 16   |
+| **RECRAFTV3**    | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **SDV3.5**       | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **SANA**         | 1:1 / 16:9 / 9:16 | 5 / 5 / 5      |
+| **SANA4.5B**     | 1:1 / 16:9 / 9:16 | 8 / 8 / 8      |
+| **SANASPRINT**   | 1:1 / 16:9 / 9:16 | 2 / 2 / 2      |
+| **PHOTON**       | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **PHOTONFLASH**  | 1:1 / 16:9 / 9:16 | 5 / 5 / 5      |
+| **RECRAFT20B**   | 1:1 / 16:9 / 9:16 | 5 / 5 / 5      |
+| **IMAGEN3**      | 1:1 / 16:9 / 9:16 | 5 / 5 / 5      |
+| **IMAGEN4**      | 1:1 / 16:9 / 9:16 | 5 / 5 / 5      |
+| **LUMINAV2**     | 16:9              | 15             |
+| **IDEOGRAMV3**   | 1:1 / 16:9 / 9:16 | 15 / 15 / 15   |
+| **HIDREAMI1**    | 1:1 / 16:9 / 9:16 | 15 / 15 / 15   |
+| **GPTIMAGE1**    | 1:1 / 16:9 / 9:16 | 15 / 15 / 15   |
+| **NANOBANANA**   | 1:1 / 16:9 / 9:16 | 15 / 15 / 15   |
+| **SEEDREAM**     | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **FLITE**        | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **HUNYUAN**      | 1:1 / 16:9 / 9:16 | 40 / 40 / 40   |
+
+---
+
+### 3.2 Image Edit Model Prices
+
+| **Model Key**             | **Aspect Ratio**  | **Price (cr)** |
+| ------------------------- | ----------------- | -------------- |
+| **FLUX1PROFILL**          | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **FLUX1.1PROULTRAREDUX**  | 1:1 / 16:9 / 9:16 | 12 / 16 / 16   |
+| **FLUX1.1PROREDUX**       | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **BRIA_ERASER**           | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **BRIA_GENFILL**          | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+| **BRIA_BACKGROUNDREMOVE** | 1:1 / 16:9 / 9:16 | 10 / 15 / 15   |
+
+---
+
+### 3.3 Video Model Prices
+
+| **Model Key**                                                                      | **Aspect Ratio**  | **Price (cr)** | **Additional Units** |
+| ---------------------------------------------------------------------------------- | ----------------- | -------------- | -------------------- |
+| **KLINGTXTTOVIDSTANDARD**                                                          | 1:1 / 16:9 / 9:16 | 60             | –                    |
+| **KLINGTXTTOVIDTURBO**                                                             | 1:1 / 16:9 / 9:16 | 60             | [5, 10]              |
+| **KLINGIMGTOVIDTURBO**                                                             | 1:1 / 16:9 / 9:16 | 60             | [5, 10]              |
+| **KLINGIMGTOVIDSTANDARD**                                                          | 1:1 / 16:9 / 9:16 | 60             | –                    |
+| **KLINGTXTTOVIDPRO**                                                               | 1:1 / 16:9 / 9:16 | 60             | –                    |
+| **KLINGIMGTOVIDPRO**                                                               | 1:1 / 16:9 / 9:16 | 60             | [5, 10]              |
+| **KLINGIMGTOVIDPROMASTER**                                                         | 1:1 / 16:9 / 9:16 | 150            | [5, 10]              |
+| **KLINGIMGTOVID2.1MASTER**                                                         | 1:1 / 16:9 / 9:16 | 150            | [5, 10]              |
+| **KLINGIMGTOVID2.1PRO**                                                            | 1:1 / 16:9 / 9:16 | 50             | [5, 10]              |
+| **KLINGIMGTOVID2.1STANDARD**                                                       | 1:1 / 16:9 / 9:16 | 30             | [5, 10]              |
+| **RUNWAYML**                                                                       | 16:9 / 9:16       | 60             | [5, 10]              |
+| **SEEDANCEI2V**                                                                    | 16:9 / 9:16       | 60             | [5, 10]              |
+| **HAILUO**                                                                         | 16:9              | 60             | [6, 10]              |
+| **HAILUOPRO**                                                                      | 16:9              | 100            | [6]                  |
+| **VEO**                                                                            | 16:9 / 9:16       | 250            | [5, 8]               |
+| **VEOI2V**                                                                         | 16:9 / 9:16       | 300            | [5, 8]               |
+| **VEO3.1 / FAST / I2V / I2VFAST**                                                  | 1:1 / 16:9 / 9:16 | 300–700        | [8]                  |
+| **PIXVERSEI2VFAST**                                                                | 1:1 / 16:9 / 9:16 | 120            | [5, 8]               |
+| **PIKA2.2I2V**                                                                     | 16:9 / 9:16       | 40             | –                    |
+| **VIDUI2V**                                                                        | 1:1 / 16:9 / 9:16 | 60             | –                    |
+| **SYNCLIPSYNC / LATENTSYNC / KLINGLIPSYNC / HUMMINGBIRDLIPSYNC / CREATIFYLIPSYNC** | 1:1 / 16:9 / 9:16 | 10             | –                    |
+| **MMAUDIOV2 / MIRELOAI**                                                           | 1:1 / 16:9 / 9:16 | 10             | [5, 10]              |
+| **WANI2V / WANI2V5B**                                                              | 16:9              | 60–100         | [5, 7]               |
+| **MAGIDISTILLED**                                                                  | 16:9 / 9:16       | 60             | –                    |
+| **SORAT2V**                                                                        | 16:9 / 9:16       | 60             | [5, 10]              |
+| **SORA2**                                                                          | 16:9 / 9:16       | 100            | [8]                  |
+| **SORA2PRO**                                                                       | 16:9 / 9:16       | 300            | [8]                  |
+
+> *“Additional Units” represent the clip-length increments billed by the provider (e.g., 5s, 8s, 10s).*
+
+---
+
+### 3.4 TTS Types
+
+Supported engines:
+
+* **OPENAI**
+* **PLAYTS**
+* **ELEVENLABS**
+
+---
+
+### 3.5 Assistant Model Prices
+
+| **Model Key** | **Operation Type** | **Tokens / op** | **Price (cr)** |
+| ------------- | ------------------ | --------------- | -------------- |
+| **GPT4O**     | words              | 1,000           | 1              |
+| **GROK3**     | words              | 1,000           | 1              |
+| **GPTO3**     | words              | 1,000           | 6              |
+
+---
+
+### 3.6 Theme Model Prices
+
+| **Operation Type** | **Tokens / op** | **Price (cr)** |
+| ------------------ | --------------- | -------------- |
+| query              | 1               | 1              |
+
+---
+
+### 3.7 Translation Model Prices
+
+| **Operation Type** | **Tokens / op** | **Price (cr)** |
+| ------------------ | --------------- | -------------- |
+| line               | 1               | 1              |
+
+---
+
+### 3.8 Prompt Generation Model Prices
+
+| **Operation Type** | **Tokens / op** | **Price (cr)** |
+| ------------------ | --------------- | -------------- |
+| line               | 1               | 1              |
+
+---
+
+### 3.9 Speech Model Prices
+
+| **Model Key** | **Operation Type** | **Tokens / op** | **Price (cr)** |
+| ------------- | ------------------ | --------------- | -------------- |
+| **TTS**       | words              | 1,000           | 1              |
+| **TTSHD**     | words              | 400             | 1              |
+
+---
+
+### 3.10 Music Model Prices
+
+| **Model Key**  | **Operation Type** | **Price (cr)** |
+| -------------- | ------------------ | -------------- |
+| **AUDIOCRAFT** | generate_song      | 2              |
+| **CASSETTEAI** | generate_song      | 5              |
+| **LYRIA2**     | generate_song      | 2              |
+
+---
+
+### Notes
+
+* All prices are expressed in **credits**.
+* “Tokens” follow the tool’s unit (e.g., words, characters, or OpenAI tokens).
+* For video models, “Additional Units” show the segment length billed by the provider.
+* VidGenie agent’s per-second rates (see § 1) take precedence when creating videos inside the VidGenie agent.
+
+---
+CONTENT_END
+=== DOCUMENT END ===
+
+=== DOCUMENT START ===
+SOURCE_PATH: docs/speakers.md
+PRIMARY_HEADING: Speakers Chart
+CONTENT_START
+# Speakers Chart
+---
+
+## 1. OPENAI_SPEAKER_TYPES
+
+### Alloy
+- **label**: Alloy  
+- **Gender**: F  
+- **value**: `alloy`  
+- **provider**: OPENAI  
+- **previewURL**: [Alloy Sample](https://cdn.openai.com/API/docs/audio/alloy.wav)
+
+### Echo
+- **label**: Echo  
+- **Gender**: M  
+- **value**: `echo`  
+- **provider**: OPENAI  
+- **previewURL**: [Echo Sample](https://cdn.openai.com/API/docs/audio/echo.wav)
+
+### Fable
+- **label**: Fable  
+- **Gender**: M  
+- **value**: `fable`  
+- **provider**: OPENAI  
+- **previewURL**: [Fable Sample](https://cdn.openai.com/API/docs/audio/fable.wav)
+
+### Onyx
+- **label**: Onyx  
+- **Gender**: M  
+- **value**: `onyx`  
+- **provider**: OPENAI  
+- **previewURL**: [Onyx Sample](https://cdn.openai.com/API/docs/audio/onyx.wav)
+
+### Nova
+- **label**: Nova  
+- **Gender**: F  
+- **value**: `nova`  
+- **provider**: OPENAI  
+- **previewURL**: [Nova Sample](https://cdn.openai.com/API/docs/audio/nova.wav)
+
+### Shimmer
+- **label**: Shimmer  
+- **Gender**: F  
+- **value**: `shimmer`  
+- **provider**: OPENAI  
+- **previewURL**: [Shimmer Sample](https://cdn.openai.com/API/docs/audio/shimmer.wav)
+
+### Ash
+- **label**: Ash  
+- **Gender**: M  
+- **value**: `ash`  
+- **provider**: OPENAI  
+- **previewURL**: [Ash Sample](https://cdn.openai.com/API/docs/audio/ash.wav)
+
+### Coral
+- **label**: Coral  
+- **Gender**: F  
+- **value**: `coral`  
+- **provider**: OPENAI  
+- **previewURL**: [Coral Sample](https://cdn.openai.com/API/docs/audio/coral.wav)
+
+### Sage
+- **label**: Sage  
+- **Gender**: F  
+- **value**: `sage`  
+- **provider**: OPENAI  
+- **previewURL**: [Sage Sample](https://cdn.openai.com/API/docs/audio/sage.wav)
+
+
+## 2. ELEVENLABS_SPEAKER_TYPES
+
+### Aria
+- **label**: Aria  
+- **gender**: female  
+- **age**: middle-aged  
+- **style**: expressive  
+- **description**: social media  
+- **voiceId**: `9BWtsMINqrJLrRacOk9x`  
+- **name**: Aria  
+- **value**: `9BWtsMINqrJLrRacOk9x`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Aria Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/9BWtsMINqrJLrRacOk9x/405766b8-1f4e-4d3c-aba1-6f25333823ec.mp3)
+
+### Roger
+- **label**: Roger  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: confident  
+- **description**: social media  
+- **voiceId**: `CwhRBWXzGAHq8TQ4Fs17`  
+- **name**: Roger  
+- **value**: `CwhRBWXzGAHq8TQ4Fs17`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Roger Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/CwhRBWXzGAHq8TQ4Fs17/58ee3ff5-f6f2-4628-93b8-e38eb31806b0.mp3)
+
+### Sarah
+- **label**: Sarah  
+- **gender**: female  
+- **age**: young  
+- **style**: soft  
+- **description**: news  
+- **voiceId**: `EXAVITQu4vr4xnSDxMaL`  
+- **name**: Sarah  
+- **value**: `EXAVITQu4vr4xnSDxMaL`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Sarah Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/EXAVITQu4vr4xnSDxMaL/01a3e33c-6e99-4ee7-8543-ff2216a32186.mp3)
+
+### Laura
+- **label**: Laura  
+- **gender**: female  
+- **age**: young  
+- **style**: upbeat  
+- **description**: social media  
+- **voiceId**: `FGY2WhTYpPnrIDTdsKH5`  
+- **name**: Laura  
+- **value**: `FGY2WhTYpPnrIDTdsKH5`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Laura Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/FGY2WhTYpPnrIDTdsKH5/67341759-ad08-41a5-be6e-de12fe448618.mp3)
+
+### Charlie
+- **label**: Charlie  
+- **gender**: male  
+- **age**: middle aged  
+- **style**: natural  
+- **description**: conversational  
+- **voiceId**: `IKne3meq5aSn9XLyUdCD`  
+- **name**: Charlie  
+- **value**: `IKne3meq5aSn9XLyUdCD`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Charlie Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/IKne3meq5aSn9XLyUdCD/102de6f2-22ed-43e0-a1f1-111fa75c5481.mp3)
+
+### George
+- **label**: George  
+- **gender**: male  
+- **age**: middle aged  
+- **style**: warm  
+- **description**: narration  
+- **voiceId**: `JBFqnCBsd6RMkjVDRZzb`  
+- **name**: George  
+- **value**: `JBFqnCBsd6RMkjVDRZzb`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [George Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/JBFqnCBsd6RMkjVDRZzb/e6206d1a-0721-4787-aafb-06a6e705cac5.mp3)
+
+### Callum
+- **label**: Callum  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: intense  
+- **description**: characters  
+- **voiceId**: `N2lVS1w4EtoT3dr4eOWO`  
+- **name**: Callum  
+- **value**: `N2lVS1w4EtoT3dr4eOWO`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Callum Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/N2lVS1w4EtoT3dr4eOWO/ac833bd8-ffda-4938-9ebc-b0f99ca25481.mp3)
+
+### River
+- **label**: River  
+- **gender**: non-binary  
+- **age**: middle-aged  
+- **style**: confident  
+- **description**: social media  
+- **voiceId**: `SAz9YHcvj6GT2YYXdXww`  
+- **name**: River  
+- **value**: `SAz9YHcvj6GT2YYXdXww`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [River Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/SAz9YHcvj6GT2YYXdXww/e6c95f0b-2227-491a-b3d7-2249240decb7.mp3)
+
+### Liam
+- **label**: Liam  
+- **gender**: male  
+- **age**: young  
+- **style**: articulate  
+- **description**: narration  
+- **voiceId**: `TX3LPaxmHKxFdv7VOQHJ`  
+- **name**: Liam  
+- **value**: `TX3LPaxmHKxFdv7VOQHJ`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Liam Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/TX3LPaxmHKxFdv7VOQHJ/63148076-6363-42db-aea8-31424308b92c.mp3)
+
+### Charlotte
+- **label**: Charlotte  
+- **gender**: female  
+- **age**: young  
+- **style**: seductive  
+- **description**: characters  
+- **voiceId**: `XB0fDUnXU5powFXDhCwa`  
+- **name**: Charlotte  
+- **value**: `XB0fDUnXU5powFXDhCwa`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Charlotte Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/XB0fDUnXU5powFXDhCwa/942356dc-f10d-4d89-bda5-4f8505ee038b.mp3)
+
+### Alice
+- **label**: Alice  
+- **gender**: female  
+- **age**: middle-aged  
+- **style**: confident  
+- **description**: news  
+- **voiceId**: `Xb7hH8MSUJpSbSDYk0k2`  
+- **name**: Alice  
+- **value**: `Xb7hH8MSUJpSbSDYk0k2`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Alice Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/Xb7hH8MSUJpSbSDYk0k2/d10f7534-11f6-41fe-a012-2de1e482d336.mp3)
+
+### Matilda
+- **label**: Matilda  
+- **gender**: female  
+- **age**: middle-aged  
+- **style**: friendly  
+- **description**: narration  
+- **voiceId**: `XrExE9yKIg1WjnnlVkGX`  
+- **name**: Matilda  
+- **value**: `XrExE9yKIg1WjnnlVkGX`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Matilda Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/XrExE9yKIg1WjnnlVkGX/b930e18d-6b4d-466e-bab2-0ae97c6d8535.mp3)
+
+### Will
+- **label**: Will  
+- **gender**: male  
+- **age**: young  
+- **style**: friendly  
+- **description**: social media  
+- **voiceId**: `bIHbv24MWmeRgasZH58o`  
+- **name**: Will  
+- **value**: `bIHbv24MWmeRgasZH58o`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Will Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/bIHbv24MWmeRgasZH58o/8caf8f3d-ad29-4980-af41-53f20c72d7a4.mp3)
+
+### Jessica
+- **label**: Jessica  
+- **gender**: female  
+- **age**: young  
+- **style**: expressive  
+- **description**: conversational  
+- **voiceId**: `cgSgspJ2msm6clMCkdW9`  
+- **name**: Jessica  
+- **value**: `cgSgspJ2msm6clMCkdW9`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Jessica Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/cgSgspJ2msm6clMCkdW9/56a97bf8-b69b-448f-846c-c3a11683d45a.mp3)
+
+### Eric
+- **label**: Eric  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: friendly  
+- **description**: conversational  
+- **voiceId**: `cjVigY5qzO86Huf0OWal`  
+- **name**: Eric  
+- **value**: `cjVigY5qzO86Huf0OWal`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Eric Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/cjVigY5qzO86Huf0OWal/d098fda0-6456-4030-b3d8-63aa048c9070.mp3)
+
+### Chris
+- **label**: Chris  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: casual  
+- **description**: conversational  
+- **voiceId**: `iP95p4xoKVk53GoZ742B`  
+- **name**: Chris  
+- **value**: `iP95p4xoKVk53GoZ742B`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Chris Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/iP95p4xoKVk53GoZ742B/3f4bde72-cc48-40dd-829f-57fbf906f4d7.mp3)
+
+### Brian
+- **label**: Brian  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: deep  
+- **description**: narration  
+- **voiceId**: `nPczCjzI2devNBz1zQrb`  
+- **name**: Brian  
+- **value**: `nPczCjzI2devNBz1zQrb`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Brian Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/nPczCjzI2devNBz1zQrb/2dd3e72c-4fd3-42f1-93ea-abc5d4e5aa1d.mp3)
+
+### Daniel
+- **label**: Daniel  
+- **gender**: male  
+- **age**: middle-aged  
+- **style**: authoritative  
+- **description**: news  
+- **voiceId**: `onwK4e9ZLuTAKqWW03F9`  
+- **name**: Daniel  
+- **value**: `onwK4e9ZLuTAKqWW03F9`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Daniel Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/onwK4e9ZLuTAKqWW03F9/7eee0236-1a72-4b86-b303-5dcadc007ba9.mp3)
+
+### Lily
+- **label**: Lily  
+- **gender**: female  
+- **age**: middle-aged  
+- **style**: warm  
+- **description**: narration  
+- **voiceId**: `pFZP5JQG7iQjIQuC4Bku`  
+- **name**: Lily  
+- **value**: `pFZP5JQG7iQjIQuC4Bku`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Lily Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/pFZP5JQG7iQjIQuC4Bku/89b68b35-b3dd-4348-a84a-a3c13a3c2b30.mp3)
+
+### Bill
+- **label**: Bill  
+- **gender**: male  
+- **age**: old  
+- **style**: trustworthy  
+- **description**: narration  
+- **voiceId**: `pqHfZKP75CvOlQylNhV4`  
+- **name**: Bill  
+- **value**: `pqHfZKP75CvOlQylNhV4`  
+- **provider**: ELEVENLABS  
+- **previewURL**: [Bill Sample](https://storage.googleapis.com/eleven-public-prod/premade/voices/pqHfZKP75CvOlQylNhV4/d782b3ff-84ba-4029-848c-acf01285524d.mp3)
+CONTENT_END
+=== DOCUMENT END ===
