@@ -36,7 +36,7 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 
 > **Header (required)**
 >
-> `Authorization: Bearer YOUR_API_KEY`
+> `Authorization: Bearer YOUR_API_KEY_****************`
 >
 > Create and manage API keys in your dashboard. Register for an account and create an API key from account settings [here](https://app.samsar.one).
 
@@ -141,7 +141,7 @@ Creates a new video-generation session.
 
 ```bash
 curl -X POST https://api.samsar.one/v1/video/create \
-  -H "Authorization: Bearer 74c4bbbee28e7e221330e48c2cdd897acad510" \
+  -H "Authorization: Bearer YOUR_API_KEY_****************" \
   -H "Content-Type: application/json" \
   -d '{
     "input": {
@@ -193,7 +193,7 @@ Fetches the current state of a generation session.
 
 ```bash
 curl -X GET "https://api.samsar.one/v1/video/status?request_id=vid_1234567890" \
-  -H "Authorization: Bearer YOUR_API_KEY"
+  -H "Authorization: Bearer YOUR_API_KEY_****************"
 ```
 
 #### Possible Responses
