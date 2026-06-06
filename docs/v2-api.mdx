@@ -1,0 +1,705 @@
+---
+title: V2 API
+description: "Use additive v2 routes that unify internal, app-key, and external-user clients across media and account workflows."
+image: img/og/v2-api.png
+slug: /v2
+sidebar_label: V2 API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# V2 API
+
+<DocTopActions />
+
+`/v2` is an additive API surface. `/v1` is not deprecated. The same router is also available under `/api/v2` for clients that use the longer API prefix.
+
+The `/v2` routes are designed for clients where either an internal Samsar account or an external user can be authenticated in the same UI. Each route resolves the authenticated actor and routes the request through the existing internal or external-user handling path so the same validation, pricing, and credit deduction rules continue to apply.
+
+## Route map
+
+### Core session and request routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/session` | Create a V2 session. |
+| `POST /v2/create_login_token` | Create a login token for authenticated flows. |
+| `GET /v2/requests` | List requests visible to the authenticated actor. |
+| `GET /v2/status` | Poll request or session status. |
+| `GET /v2/status_detailed` | Poll status plus normalized video-session preview data. |
+| `POST /v2/status_detailed` | POST alias for detailed status checks. |
+
+### Credits and billing routes
+
+| Route | Purpose |
+| --- | --- |
+| `GET /v2/credits` | Fetch resolved actor credits. |
+| `POST /v2/credits/recharge` | Create an internal recharge flow. |
+| `POST /v2/credits/grant` | Grant credits to an external user. |
+| `GET /v2/payment_status` | Fetch payment status for a resolved actor. |
+| `POST /v2/payment_status` | Check payment status with a request body. |
+
+### User account routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/user/recharge_credits` | Create or top up a Samsar user by email. |
+| `GET /v2/user/recharge_credits` | GET alias for user credit recharge. |
+| `POST /v2/user/create_external_user` | Create or update an external user mapped to the authenticated internal user. |
+| `POST /v2/user/refresh_token` | Rotate a user refresh token. |
+| `GET /v2/user/refresh_token` | GET alias for user refresh token rotation. |
+| `GET /v2/user/credits` | Fetch authenticated user credits. |
+| `GET /v2/user/usage/logs` | Fetch authenticated user usage logs. |
+| `GET /v2/user/payment_status` | Fetch user payment status. |
+| `POST /v2/user/payment_status` | Check user payment status with a request body. |
+
+### App key routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/users/app_key` | Create a long-running app key. |
+| `GET /v2/users/app_key` | Fetch active app key metadata. |
+| `DELETE /v2/users/app_key` | Revoke the active app key. |
+| `POST /v2/users/app_key/refresh` | Rotate an app key. |
+| `GET /v2/users/app_key/refresh` | GET alias for app key rotation. |
+
+### Assistant and utility routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/assistant/set_system_prompt` | Set an assistant system prompt. |
+| `POST /v2/assistant/completion` | Create an assistant completion. |
+| `POST /v2/utils/assistant_session` | Create or resolve an assistant session. |
+| `POST /v2/utils/usage_charge` | Apply a usage charge. |
+| `POST /v2/generate_embeddings_from_plain_text` | Create embeddings from cleaned plain text. |
+
+### Media generation routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/upload_image_data` | Upload image data for later generation routes. |
+| `POST /v2/image/assign_title` | Assign a short SEO-friendly image title. Returns `{ "content": "..." }` synchronously and uses usage-based credits. |
+| `POST /v2/images/assign_title` | Alias for `POST /v2/image/assign_title`. |
+| `POST /v2/image/enhance` | Enhance or upscale an image using the same pricing as `/v1/image/enhance`. |
+| `POST /v2/image/remove_branding` | Remove watermark, logo, or brand text using the same pricing as `/v1/image/remove_branding`. |
+| `POST /v2/image/add_image_set` | Extend an image set using the same pricing as `/v1/image/add_image_set`. |
+| `POST /v2/text_to_video` | Create a video from text input. |
+| `POST /v2/image_list_to_video` | Create a video from image URLs. |
+| `POST /v2/video/step/text_to_video` | Create a step-controlled text-to-video request. |
+| `POST /v2/video/step/image_to_video` | Create a step-controlled image-to-video request. |
+| `GET /v2/video/step/:request_id/status` | Poll step-controlled request status and completed resources. |
+| `GET /v2/video/step/:request_id/status_detailed` | Poll step status plus normalized preview data for completed media. |
+| `POST /v2/video/step/:request_id/status_detailed` | POST alias for detailed step status checks. |
+| `POST /v2/video/step/:request_id/process_next` | Continue a completed step-controlled request to the next stage. |
+| `POST /v2/translate_video` | Translate an existing video. |
+| `POST /v2/retranslate_video` | Alias for translating an existing video. |
+| `POST /v2/add_outro_image` | Add an outro image to an existing video. |
+| `POST /v2/update_outro_image` | Update an existing outro image. |
+| `POST /v2/update_footer_image` | Update or remove an existing video footer CTA. |
+| `POST /v2/join_videos` | Join videos into one output. |
+| `POST /v2/video/clone` | Deep-copy a completed video session and render a new final video URL. |
+
+### Publishing routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v2/archive` | Archive a generated asset. |
+| `POST /v2/publish` | Publish a generated asset. |
+
+## Authentication behavior
+
+- Internal API key or internal auth token with no `external_user` payload uses the internal account and deducts internal generation credits.
+- APP_KEY authentication uses `Authorization: AppKey <APP_KEY>` plus `x-app-secret: <APP_SECRET>`. It is a third internal-account auth method for `/v2` routes after the APP_KEY has been created with a normal API key or user auth token.
+- Internal API key/auth token plus an `external_user` payload uses the external-user path and deducts that external user's credits.
+- External-user auth tokens, internal API keys paired with an external-user API key, and customer sub-account API keys use the external-user path.
+- Repeated video routes and status routes resolve `request_id` / `session_id` through external request records and `GlobalSession` records, so either returned `extreq_...` ids, normalized external ids, or internal video session ids can be used.
+
+## External user registration
+
+Use `POST /v2/user/create_external_user` to create or update an external user record under the authenticated internal Samsar user. Authenticate with an internal API key, internal user auth token, or APP_KEY. External-user auth tokens and customer sub-account auth cannot create new external users.
+
+The route accepts a `unique_key` for the external user, such as a wallet address, email address, or your platform's user id. If `unique_key` is omitted, Samsar uses `external_user_id` as the `unique_key`. Future V2 calls can reference that external user with `unique_key`.
+
+**Request**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/user/create_external_user" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unique_key": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "email": "member@example.com",
+    "display_name": "Member Name"
+  }'
+```
+
+You can also send `provider`, `external_user_id`, `external_app_id`, `external_company_id`, `external_account_id`, `username`, `avatar_url`, `user_type`, and `metadata`. If `provider` is omitted, Samsar stores the record under the default V2 provider.
+
+**Success response (201)**
+
+```json
+{
+  "unique_key": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "provider": "samsar_v2",
+  "external_user_id": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "external_app_id": null,
+  "external_user": {
+    "id": "65f...",
+    "provider": "samsar_v2",
+    "external_user_id": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "unique_key": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "email": "member@example.com",
+    "display_name": "Member Name",
+    "generation_credits": 0
+  },
+  "reference": {
+    "provider": "samsar_v2",
+    "unique_key": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "external_user_id": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "external_app_id": null
+  }
+}
+```
+
+If a matching `unique_key` or external identity already belongs to another internal user, the route returns `409`.
+
+## User credits and tokens
+
+Use `/v2/user/recharge_credits` when a client needs to create or top up a Samsar user account by email without first holding an API key. The route accepts `POST` or `GET`; `POST` is recommended.
+
+**Request**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/user/recharge_credits" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 25,
+    "email": "customer@example.com",
+    "redirect_url": "https://example.com/samsar/callback"
+  }'
+```
+
+Fields:
+
+- `amount` is a positive USD amount. Credits are calculated with the standard **1 USD = 100 credits** rule.
+- `email` must be a valid email address.
+- `redirect_url` must be HTTPS. The payment success webhook sends the token callback to this URL.
+
+**Success response (200)**
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "checkoutSessionId": "cs_test_...",
+  "paymentStatusEndpoint": "/v2/user/payment_status",
+  "amount": 25,
+  "amountCents": 2500,
+  "credits": 2500,
+  "currency": "USD",
+  "redirectUrl": "https://example.com/samsar/callback"
+}
+```
+
+On Stripe payment success, Samsar:
+
+- creates a user for `email` if one does not already exist,
+- sends the new user a Samsar Studio email to confirm email and set a password,
+- applies the purchased credits idempotently,
+- mints a 10-day `authToken`,
+- mints a rotating `refreshToken`,
+- calls `redirect_url` with `authToken`, `refreshToken`, and `expiryDate` query parameters.
+
+The webhook first attempts `GET <redirect_url>?authToken=...&refreshToken=...&expiryDate=...`. If that returns `404`, it retries `POST` to the same URL with the same query parameters and a JSON body containing the token and payment metadata.
+
+Clients should store `authToken`, `refreshToken`, and `expiryDate`. Poll for a replacement token when the app opens within 3 days of `expiryDate`.
+
+**Refresh token rotation**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/user/refresh_token" \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "srf_..."}'
+```
+
+**Success response (200)**
+
+```json
+{
+  "tokenType": "Bearer",
+  "authToken": "eyJ...",
+  "refreshToken": "srf_new...",
+  "expiryDate": "2026-05-08T12:00:00.000Z",
+  "expiresInSeconds": 864000,
+  "refreshTokenExpiresAt": "2026-07-27T12:00:00.000Z"
+}
+```
+
+`/v2/user/refresh_token` consumes the old refresh token and returns both a new 10-day auth token and a new refresh token. Reusing the previous refresh token returns `401`.
+
+Use the returned `authToken` as `Authorization: Bearer <authToken>` for `/v2/user/credits`, `/v2/user/usage/logs`, `/v2/user/payment_status`, and the rest of the internal `/v2` routes.
+
+## App key credentials
+
+Use `/v2/users/app_key` to mint one long-running APP_KEY for a user after the user is already authenticated with a Samsar API key or user auth token. `/v2/user/app_key` is accepted as an alias.
+
+The client supplies a custom `secret`. Samsar returns the APP_KEY once, stores only an HMAC hash of the APP_KEY, and stores only a bcrypt hash of the secret. If an active APP_KEY already exists for the user, creation returns `409`.
+
+**Create APP_KEY**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/users/app_key" \
+  -H "Authorization: Bearer $SAMSAR_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "secret": "a-client-generated-secret-at-least-32-chars"
+  }'
+```
+
+**Success response (201)**
+
+```json
+{
+  "app_key": "sapp_...",
+  "appKey": "sapp_...",
+  "token_type": "AppKey",
+  "expires_at": "2027-04-28T12:00:00.000Z",
+  "app_key_record": {
+    "id": "appkey_...",
+    "appKeyPrefix": "sapp_abc12",
+    "appKeyLast4": "9xyz",
+    "status": "active",
+    "expiresAt": "2027-04-28T12:00:00.000Z",
+    "authScheme": "AppKey",
+    "authHeader": "Authorization: AppKey <APP_KEY>",
+    "secretHeader": "x-app-secret"
+  }
+}
+```
+
+Use the APP_KEY on authenticated `/v2` routes:
+
+```bash
+curl "https://api.samsar.one/v2/user/credits" \
+  -H "Authorization: AppKey $SAMSAR_APP_KEY" \
+  -H "x-app-secret: $SAMSAR_APP_SECRET"
+```
+
+If the APP_KEY expires, rotate it with the APP_KEY and APP_SECRET. The old APP_KEY is consumed and replaced; the APP_SECRET stays the same.
+
+```bash
+curl -X POST "https://api.samsar.one/v2/users/app_key/refresh" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_key": "sapp_...",
+    "secret": "a-client-generated-secret-at-least-32-chars"
+  }'
+```
+
+`GET /v2/users/app_key` returns APP_KEY metadata for an authenticated user without returning the secret or full key. `DELETE /v2/users/app_key` revokes the active APP_KEY so the user can create a replacement.
+
+## Media generation
+
+`POST /v2/text_to_video` and `POST /v2/image_list_to_video` accept the same media input shape as the corresponding `/v1/video/*` routes, either nested under `input` or sent as a flat JSON payload. Use `backingtrack_model` / `music_provider` to choose `LYRIA3` or `ELEVENLABS_MUSIC`, use `tts_model` / `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, optionally use `speakerOptions` / `speaker_options` to constrain the request to specific `openAISpeakers`, `elevenLabsSpeakers`, or Google `googleSpeakers` with `googleSpeakerDetails`, and optionally use `inference_model` / `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro` for render planning. Omit `inference_model` to use the account default inference model. `video_model_sub_type` is not part of the v2 request shape; describe style direction in `prompt` and model choices instead.
+
+**Internal billing example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/image_list_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "image_urls": ["https://cdn.example.com/a.png", "https://cdn.example.com/b.png"],
+      "video_model": "RUNWAYML",
+      "express_cta_generation": true,
+      "cta_url": "https://example.com/book",
+      "limit_single_narrator": true
+    }
+  }'
+```
+
+**External-user billing example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/image_list_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user": {
+      "provider": "guidestination",
+      "unique_key": "traveler_123",
+      "external_user_id": "traveler_123"
+    },
+    "input": {
+      "image_urls": ["https://cdn.example.com/a.png", "https://cdn.example.com/b.png"],
+      "video_model": "KLINGIMGTOVID3PRO",
+      "add_narrator_avatar": true,
+      "add_footer_animation": true,
+      "footer_metadata": [
+        { "url": "https://example.com/stop/1", "title": "Stop 1" },
+        { "url": "https://example.com/stop/2", "title": "Stop 2" }
+      ]
+    }
+  }'
+```
+
+For `/v2/image_list_to_video`, provide `cta_url` to add a server-generated CTA outro. Set `express_cta_generation: true` with one `cta_url` when you want Samsar to generate concise per-scene footer CTA titles from the image payload and clean outro CTA text from the session context. Use `backingtrack_model` or `music_provider` to choose `LYRIA3` for Google Lyria 3 Pro native backing tracks or `ELEVENLABS_MUSIC` for ElevenLabs Music; legacy `LYRIA2` values are treated as `LYRIA3`. Use `tts_model` or `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, and use `speakerOptions` or `speaker_options` when the request should override account speaker settings for that TTS provider. Use `inference_model` or `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro`; omit it to use the account default inference model. `add_outro_animation` is optional and defaults to `true`; supplied outro image URLs and manual outro focus dimensions are not part of the v2 image-list request shape. `limit_single_narrator` keeps all narration under one narrator identity. `add_narrator_avatar` automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, overlays it bottom-center or centered in the footer row, and adds 4 credits/sec. The same standard model prices apply as `/v1`: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec; express CTA generation adds 1 credit/sec, and outro add/update plus footer update routes are 75 credits/request.
+
+### V2 image edit routes
+
+The `/v2/image/enhance`, `/v2/image/remove_branding`, and `/v2/image/add_image_set` routes are thin aliases over the existing image API handlers and use the same image edit queue, validation, credit headers, and status polling behavior as `/v1/image/*`. Request bodies may be sent either directly or inside the standard V2 `{ "input": { ... } }` wrapper.
+
+Pricing is unchanged from the Image API: `POST /v2/image/enhance` charges 11 credits at `0.5k`, 15 credits at `1k`, 22 credits at `2k`, and 29 credits at `4k`; `POST /v2/image/remove_branding` charges 15 credits per request; `POST /v2/image/add_image_set` charges `15 × requested_images`.
+
+### Step-controlled video generation
+
+Use the `/v2/video/step/*` routes when a client needs step-aware generation and detailed timeline preview data. Step requests use the same express video models and stage billing rules as `/v2/text_to_video` and `/v2/image_list_to_video`.
+
+Step routes support two render modes:
+
+- **1-step express render**: set `auto_render_full_video: true` and `manual_step_stages: []`. The request generates the full video without waiting for user approval before `ai_video_generation`.
+- **2-step render**: set `auto_render_full_video: false` and `manual_step_stages: ["ai_video_generation"]`. The request pauses after image/audio assets are ready, then waits for `process_next` before the image-to-video stage.
+
+When your request body uses the standard `{ "input": { ... } }` wrapper, include these fields inside `input`. Clients may also send the same fields at the top level for compatibility. Only call `process_next` when the status response says `waiting_for_process_next`, `requires_user_action`, or `can_process_next` is true.
+
+Step-controlled routes are internal-account routes. Authenticate with a Samsar API key, user auth token, or APP_KEY.
+
+**Create from text**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/video/step/text_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "auto_render_full_video": true,
+    "manual_step_stages": [],
+    "input": {
+      "prompt": "A 20 second launch teaser for a new travel app",
+      "image_model": "GPTIMAGE2",
+      "video_model": "RUNWAYML",
+      "duration": 20,
+      "aspect_ratio": "16:9",
+      "enable_subtitles": true,
+      "auto_render_full_video": true,
+      "manual_step_stages": []
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Create from an image**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/video/step/image_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "auto_render_full_video": false,
+    "manual_step_stages": ["ai_video_generation"],
+    "input": {
+      "image_url": "https://cdn.example.com/product-frame.png",
+      "prompt": "Turn this product frame into a cinematic ad",
+      "video_model": "KLINGIMGTOVID3PRO",
+      "aspect_ratio": "16:9",
+      "enable_subtitles": true,
+      "auto_render_full_video": false,
+      "manual_step_stages": ["ai_video_generation"]
+    }
+  }'
+```
+
+The response includes the normal `request_id` / `session_id` plus a `step` object. For 1-step requests, poll the detailed step status route until the final video is complete. For 2-step requests, poll until the response asks for user action, inspect `current_step_resources`, optionally edit resources through the relevant session/resource APIs, then call `process_next`.
+
+```bash
+curl "https://api.samsar.one/v2/video/step/65f1234567890abcdef12345/status" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+```json
+{
+  "request_id": "65f1234567890abcdef12345",
+  "session_id": "65f1234567890abcdef12345",
+  "status": "COMPLETED",
+  "step_status": "COMPLETED",
+  "current_step": "image_generation",
+  "current_step_label": "Images",
+  "next_step": "ai_video_generation",
+  "waiting_for_process_next": true,
+  "requires_user_action": true,
+  "can_process_next": true,
+  "manual_step_stages": ["ai_video_generation"],
+  "process_next_url": "/v2/video/step/process_next",
+  "current_step_resources": {
+    "step": "image_generation",
+    "label": "Images",
+    "status": "COMPLETED",
+    "completed_at": "2026-05-07T10:30:00.000Z",
+    "resources": {
+      "layers": [
+        {
+          "index": 0,
+          "prompt": "Wide product shot with cinematic lighting",
+          "selected_image_url": "https://cdn.samsar.one/generated/layer-0.png"
+        }
+      ]
+    }
+  },
+  "completed_step_resources": {
+    "prompt_generation": {
+      "completed_at": "2026-05-07T10:27:00.000Z",
+      "resources": {
+        "input_prompt": "A 20 second launch teaser for a new travel app",
+        "scenes": []
+      }
+    },
+    "image_generation": {
+      "completed_at": "2026-05-07T10:30:00.000Z",
+      "resources": {
+        "layers": []
+      }
+    }
+  }
+}
+```
+
+For preview playback before the final render, use `status_detailed`. It returns the same top-level status fields plus `status_detail_schema` and a normalized `session` object. The session payload includes only the data needed to reconstruct the current playable stage on the client: scene `layers`, `audioLayers`, `globalAudioLayers`, `globalVideos`, and final `result` metadata when available. Layer timing is normalized to `startTime` and `endTime`; the response does not expose internal fields such as `durationOffset`.
+
+```bash
+curl "https://api.samsar.one/v2/video/step/65f1234567890abcdef12345/status_detailed" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+Example response after `ai_video_generation` has completed, before lip sync, effects, or the final render:
+
+```json
+{
+  "request_id": "65f1234567890abcdef12345",
+  "session_id": "65f1234567890abcdef12345",
+  "status": "COMPLETED",
+  "type": "video",
+  "provider": "RUNWAYML",
+  "step_status": "COMPLETED",
+  "current_step": "ai_video_generation",
+  "current_step_label": "AI video",
+  "next_step": "lip_sync_generation",
+  "waiting_for_process_next": true,
+  "process_next_url": "/v2/video/step/process_next",
+  "status_detail_schema": "video_session_preview.v1",
+  "session": {
+    "id": "65f1234567890abcdef12345",
+    "requestId": "65f1234567890abcdef12345",
+    "type": "video",
+    "routeType": "step",
+    "aspectRatio": "16:9",
+    "framesPerSecond": 30,
+    "duration": 12,
+    "language": "en",
+    "hasSubtitles": true,
+    "hasFooter": false,
+    "inputPrompt": "A 12 second launch teaser for a new travel app",
+    "generationType": "text_to_video",
+    "provider": "RUNWAYML",
+    "currentStage": "lip_sync_generation",
+    "previewStage": "ai_video_generation",
+    "completedStages": [
+      "prompt_generation",
+      "image_generation",
+      "speech_generation",
+      "music_generation",
+      "audio_generation",
+      "ai_video_generation"
+    ],
+    "stages": {
+      "prompt_generation": "COMPLETED",
+      "image_generation": "COMPLETED",
+      "speech_generation": "COMPLETED",
+      "music_generation": "COMPLETED",
+      "audio_generation": "COMPLETED",
+      "ai_video_generation": "COMPLETED",
+      "lip_sync_generation": "INIT",
+      "sound_effect_generation": "INIT",
+      "video_generation": "INIT"
+    },
+    "layers": [
+      {
+        "index": 0,
+        "id": "65f1234567890abcdef0001",
+        "startTime": 0,
+        "endTime": 6,
+        "duration": 6,
+        "prompt": "Wide product shot with cinematic lighting",
+        "videoPrompt": "Slow push-in over the mobile booking screen",
+        "image": {
+          "status": "COMPLETED",
+          "url": "https://cdn.samsar.one/generated/scene-0.png"
+        },
+        "aiVideo": {
+          "status": "COMPLETED",
+          "url": "https://cdn.samsar.one/generated/scene-0-ai.mp4"
+        },
+        "preview": {
+          "stage": "ai_video_generation",
+          "type": "video",
+          "url": "https://cdn.samsar.one/generated/scene-0-ai.mp4"
+        }
+      },
+      {
+        "index": 1,
+        "id": "65f1234567890abcdef0002",
+        "startTime": 6,
+        "endTime": 12,
+        "duration": 6,
+        "prompt": "Traveler checking into a hotel from the app",
+        "videoPrompt": "Handheld travel lifestyle shot with warm daylight",
+        "image": {
+          "status": "COMPLETED",
+          "url": "https://cdn.samsar.one/generated/scene-1.png"
+        },
+        "aiVideo": {
+          "status": "COMPLETED",
+          "url": "https://cdn.samsar.one/generated/scene-1-ai.mp4"
+        },
+        "preview": {
+          "stage": "ai_video_generation",
+          "type": "video",
+          "url": "https://cdn.samsar.one/generated/scene-1-ai.mp4"
+        }
+      }
+    ],
+    "audioLayers": [
+      {
+        "index": 0,
+        "type": "speech",
+        "status": "COMPLETED",
+        "startTime": 0,
+        "endTime": 6,
+        "duration": 6,
+        "url": "https://cdn.samsar.one/generated/scene-0-speech.mp3",
+        "speaker": "alloy",
+        "connectedLayerIndex": 0
+      },
+      {
+        "index": 1,
+        "type": "speech",
+        "status": "COMPLETED",
+        "startTime": 6,
+        "endTime": 12,
+        "duration": 6,
+        "url": "https://cdn.samsar.one/generated/scene-1-speech.mp3",
+        "speaker": "alloy",
+        "connectedLayerIndex": 1
+      }
+    ],
+    "globalAudioLayers": [
+      {
+        "index": 0,
+        "type": "music",
+        "status": "COMPLETED",
+        "startTime": 0,
+        "endTime": 12,
+        "duration": 12,
+        "url": "https://cdn.samsar.one/generated/music-bed.mp3",
+        "volume": 0.25
+      }
+    ],
+    "result": {
+      "hasSubtitles": true,
+      "hasFooter": false,
+      "language": "en"
+    }
+  }
+}
+```
+
+Continue to the next stage:
+
+```bash
+curl -X POST "https://api.samsar.one/v2/video/step/65f1234567890abcdef12345/process_next" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+Step status values:
+
+- `INIT`: the step request exists but has not started its first tracked stage.
+- `PENDING`: the current stage is running.
+- `COMPLETED`: the final video stage is complete, or a 2-step request is paused at a manual checkpoint and waiting for `process_next`.
+- `FAILED`: the request failed.
+
+The stage sequence is `prompt_generation`, `image_generation`, `speech_generation`, `music_generation`, `ai_video_generation`, `lip_sync_generation`, `sound_effect_generation`, `narrator_avatar_generation`, and `video_generation`.
+
+**Translate example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/translate_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "language": "es",
+      "enable_subtitles": false,
+      "translate_outro": true,
+      "translate_footer": true
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+`/v2/translate_video` and `/v2/retranslate_video` accept the same payload as `/v1/video/translate_video`. `enable_subtitles` defaults to `false`; when true, Samsar regenerates translated transcript/subtitle text. `translate_outro` and `translate_footer` default to `true` and localize stored generated-outro CTA text and footer CTA text when those metadata fields exist. The translate route no longer accepts `outro_image_url`; use `/v2/update_outro_image` for outro replacement.
+
+**Footer update example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/update_footer_image" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "cta_text": "Scan to book",
+      "cta_logo": "https://cdn.example.com/logo-white.png",
+      "cta_url": "https://example.com/book"
+    }
+  }'
+```
+
+Set `remove_footer: true` in the `input` object to clone the session and remove all scene footers instead. Like `/v1/video/update_footer_image`, the V2 route queues only footer/frame/video work and charges 75 credits/request.
+
+**Deep clone example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/video/clone" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4"
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+`/v2/video/clone` is free for an authenticated user who owns the source session. It copies the session data and local generated assets into a new session, marks all upstream generation stages complete, and queues only the final `video_generation` stage so the clone receives its own rendered video path and URL. Poll `/v2/status?request_id=<new_session_id>` until it returns the standard completed video payload with `result_url`, `has_subtitles`, and `result_language`.
+
+## Assistant and utilities
+
+Assistant and utility routes use the same actor resolution behavior as the rest of `/v2`. Use them when a mixed internal/external-user client needs assistant completions, assistant sessions, usage charges, or cleaned-text embeddings through one API prefix.
+
+Supported assistant and utility routes:
+
+- `POST /v2/assistant/set_system_prompt`
+- `POST /v2/assistant/completion`
+- `POST /v2/utils/assistant_session`
+- `POST /v2/utils/usage_charge`
+- `POST /v2/generate_embeddings_from_plain_text`
+
+## Request status and publishing
+
+Use `GET /v2/status` with any `request_id` returned by a V2 generation route. Status resolution accepts external request ids, normalized external ids, and internal video session ids where available.
+
+Use `GET /v2/status_detailed` or `POST /v2/status_detailed` when a video client needs preview assets before the final render finishes. Detailed status is additive: every existing `/v2/status` field remains unchanged, and video requests also include `status_detail_schema: "video_session_preview.v1"` with a normalized `session` preview payload. Use `session.previewStage` to choose the furthest playable stage, then render scene clips from `session.layers[].preview`, speech from `session.audioLayers`, background audio from `session.globalAudioLayers`, and final output metadata from `session.result` once available.
+
+Publishing and archive routes operate on the resolved actor's accessible assets:
+
+- `POST /v2/archive`
+- `POST /v2/publish`

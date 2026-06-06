@@ -1,0 +1,705 @@
+---
+title: External Users API
+description: "Attribute shared Samsar usage to external platform users with scoped credits, login tokens, and request history."
+image: img/og/external-users-api.png
+sidebar_position: 5
+slug: /external-users
+sidebar_label: External Users API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# External Users API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one/v1`
+- Platform auth: `Authorization: Bearer <PLATFORM_API_KEY>`
+- Scoped external auth: `x-external-user-api-key: <EXTERNAL_USER_API_KEY>`
+- Client auth after login exchange: `Authorization: Bearer <EXTERNAL_AUTH_TOKEN>`
+- Content-Type: `application/json`
+- Billing: upstream model calls still execute against the owning Samsar account internally, while credits, purchases, refunds, request history, and library actions are tracked on each `external_user`
+
+Use this surface when many users share one central Samsar account, but each external user still needs their own credits, request history, payments, publishing controls, and login session.
+
+## External user identity
+
+Most external endpoints accept an `external_user` object:
+
+```json
+{
+  "external_user": {
+    "provider": "whop",
+    "unique_key": "whop:usr_123",
+    "external_user_id": "usr_123",
+    "external_app_id": "app_abc",
+    "external_company_id": "biz_456",
+    "email": "member@example.com",
+    "username": "member_handle",
+    "display_name": "Member Name",
+    "metadata": {
+      "membership_id": "mem_123"
+    }
+  }
+}
+```
+
+Required fields:
+
+- `provider`
+- `external_user_id`
+
+Optional stable reference:
+
+- `unique_key`: a globally unique reference for the external user, such as a wallet address, email address, or platform user key. If omitted, Samsar stores `external_user_id` as the `unique_key`.
+
+Recommended for multi-app providers:
+
+- `external_app_id`
+- `external_company_id`
+
+The first successful bootstrap request upserts an `ExternalUser` record mapped to the owning Samsar account internally. The stored record keeps both the owning internal user id and the external user's `unique_key`.
+
+For V2 clients that only need to register and reference an external user by a single key, use `POST /v2/user/create_external_user` with an internal API key, user auth token, or APP_KEY:
+
+```bash
+curl -X POST https://api.samsar.one/v2/user/create_external_user \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unique_key": "wallet:0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "email": "member@example.com",
+    "display_name": "Member Name"
+  }'
+```
+
+The response includes `external_user.unique_key` and a `reference` object. Future V2 calls can pass that `unique_key` to resolve the external user.
+
+## Auth model
+
+There are two supported auth patterns.
+
+### 1. Server-to-server platform flow
+
+1. Your backend calls `POST /external_users/session` with the shared platform API key plus an `external_user` object.
+2. Samsar upserts the external user and returns an `external_api_key`.
+3. Subsequent external-user scoped requests include:
+   - `Authorization: Bearer <PLATFORM_API_KEY>`
+   - `x-external-user-api-key: <EXTERNAL_USER_API_KEY>`
+
+### 2. Client login flow
+
+1. Your backend calls `POST /external_users/create_login_token`.
+2. Samsar returns a short-lived `loginToken` and a ready-to-open `loginUrl`.
+3. The client exchanges that `loginToken` through `GET /users/verify_token?loginToken=...`.
+4. The response contains a long-lived `authToken`.
+5. The client can call `/v1/external_users/*` routes with:
+   - `Authorization: Bearer <EXTERNAL_AUTH_TOKEN>`
+
+The platform API key should stay server-side. Only the external auth token should reach the browser.
+
+## Response conventions
+
+External generation endpoints return external request ids:
+
+```json
+{
+  "request_id": "extreq_...",
+  "session_id": "extreq_...",
+  "external_request_id": "extreq_...",
+  "external_session_id": "extreq_...",
+  "upstream_request_id": "66ff...",
+  "upstream_session_id": "66ff...",
+  "status_endpoint": "/v1/external_users/status?request_id=extreq_..."
+}
+```
+
+- `request_id` / `session_id` are the external ids you should store client-side.
+- `upstream_request_id` / `upstream_session_id` are the internal Samsar session ids.
+- Poll `GET /external_users/status` with the external request id.
+
+## POST /external_users/session
+
+Create or refresh an external-user session and receive that user’s dedicated API key plus current credits.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/session \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user": {
+      "provider": "whop",
+      "unique_key": "whop:usr_123",
+      "external_user_id": "usr_123",
+      "external_app_id": "app_abc"
+    }
+  }'
+```
+
+Success response:
+
+```json
+{
+  "external_api_key": "sxu_********************************",
+  "remainingCredits": 1000,
+  "external_user": {
+    "provider": "whop",
+    "unique_key": "whop:usr_123",
+    "external_user_id": "usr_123",
+    "generation_credits": 1000,
+    "has_external_api_key": true
+  }
+}
+```
+
+## POST /external_users/create_login_token
+
+Create a short-lived external-user login token and a ready-to-open client login URL.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/create_login_token \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "redirect": "/external/studio"
+  }'
+```
+
+Success response:
+
+```json
+{
+  "loginToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresInSeconds": 600,
+  "expiresAt": "2026-03-21T12:00:00.000Z",
+  "loginUrl": "https://app.samsar.one/verify?loginToken=...&redirect=%2Fexternal%2Fstudio",
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123"
+  }
+}
+```
+
+## GET /users/verify_token
+
+Exchange the external `loginToken` for a long-lived external `authToken`.
+
+```bash
+curl "https://api.samsar.one/users/verify_token?loginToken=LOGIN_TOKEN_****************"
+```
+
+Success response:
+
+```json
+{
+  "_id": "69bbb64111f47422c1083360",
+  "authToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "isExternalUser": true,
+  "provider": "whop",
+  "externalUserId": "user_46cF7yVLkPms5",
+  "externalAppId": "app_8jnV5WOvSLgyLr",
+  "generationCredits": 3000
+}
+```
+
+Once you have this `authToken`, call external-user routes with:
+
+```bash
+-H "Authorization: Bearer EXTERNAL_AUTH_TOKEN_****************"
+```
+
+## POST /external_users/assistant/set_system_prompt
+
+Store or clear an assistant system prompt for one external user. This prompt is applied to that external user’s future assistant requests and overrides the owning account prompt for that external user only.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/assistant/set_system_prompt \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "system_prompt": "You are the storefront assistant for this creator. Keep answers concise, visually aware, and commercially practical."
+  }'
+```
+
+Success response:
+
+```json
+{
+  "system_prompt": "You are the storefront assistant for this creator. Keep answers concise, visually aware, and commercially practical.",
+  "model": "gpt-5.5",
+  "selected_assistant_model": "gpt-5.5",
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123"
+  }
+}
+```
+
+Pass `null` or an empty string to clear the external-user-specific prompt and fall back to the owning account prompt or Samsar’s minimal default prompt.
+
+## POST /external_users/assistant/completion
+
+Create a synchronous assistant response for an external user. Credits are deducted from the external user balance, while the owning Samsar account’s configured assistant model is used internally.
+
+- `session_id` is required.
+- You can send the external request/session id returned by external generation routes, or the upstream internal session id.
+- Request and response format match the standard Assistant API, including multimodal input and image-generation tool calls.
+- Pricing follows the same assistant logic as the main Assistant API: actual usage is converted with **100 credits = $1** and multiplied by **2.5x**.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/assistant/completion \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "extreq_123",
+    "input": "Write a product caption for this video and suggest a headline.",
+    "max_output_tokens": 250
+  }'
+```
+
+Success response:
+
+```json
+{
+  "id": "resp_123",
+  "object": "response",
+  "created_at": 1773651000,
+  "status": "completed",
+  "model": "gpt-5.5",
+  "output_text": "Built to move fast: bold design, clean energy, and a launch-ready look in one line.",
+  "output": [
+    {
+      "id": "resp_123_message",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Built to move fast: bold design, clean energy, and a launch-ready look in one line.",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 482,
+    "output_tokens": 43,
+    "total_tokens": 525
+  }
+}
+```
+
+Response headers:
+
+- `x-credits-charged`
+- `x-credits-remaining`
+
+## POST /external_users/generate_embeddings_from_plain_text
+
+Create embeddings for one external user from already cleaned plain text. This route skips crawling entirely and uses the same compatible embedding template format as the main chat embedding endpoints.
+
+- Request body accepts the same cleaned text shapes as `/chat/generate_embeddings_from_plain_text`.
+- External-user credits are charged on the external balance only.
+- Pricing is the embedding token cost with a **2.5x** multiplier and no crawl charges.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/generate_embeddings_from_plain_text \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "name": "product-docs-clean",
+      "plain_text": [
+        {
+          "url": "https://example.com/docs/getting-started",
+          "title": "Getting Started",
+          "content": "Cleaned plain text content from the page."
+        }
+      ]
+    }
+  }'
+```
+
+Success response:
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_hash": "b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "hash_link": "embedding_template:b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "record_count": 1,
+  "structured_fields": [
+    { "key": "hostname", "type": "string" }
+  ],
+  "unstructured_fields": ["title", "content"],
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123",
+    "generation_credits": 980
+  }
+}
+```
+
+Response headers:
+
+- `x-credits-charged`
+- `x-credits-remaining`
+
+## POST /external_users/text_to_video
+
+Create a text-to-video request attributed to an external user.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/text_to_video \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user": {
+      "provider": "whop",
+      "external_user_id": "usr_123",
+      "external_app_id": "app_abc"
+    },
+    "input": {
+      "prompt": "A cinematic teaser for a new sneaker drop",
+      "image_model": "GPTIMAGE2",
+      "video_model": "RUNWAYML",
+      "duration": 10,
+      "tone": "grounded",
+      "aspect_ratio": "16:9",
+      "language": "en",
+      "enable_subtitles": true,
+      "font_key": "Poppins",
+      "generate_outro_image": true,
+      "cta_url": "https://example.com/drop",
+      "cta_text_top": "Scan to shop",
+      "cta_text_bottom": "Limited release",
+      "add_footer_animation": true,
+      "footer_metadata": [
+        { "url": "https://example.com/drop", "title": "Shop the drop" }
+      ]
+    }
+  }'
+```
+
+`input` accepts the same text-to-video parameters as `POST /video/text_to_video`, including optional `backingtrack_model` / `music_provider`, optional `tts_model` / `tts_provider`, optional `speakerOptions` / `speaker_options` for request-level speaker selection, optional `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), provided outro image fields, generated QR outro fields (`generate_outro_image` with `cta_url`), and bottom CTA footer fields (`add_footer_animation` with `footer_metadata`). `video_model_sub_type` is not part of the request shape. Credits are reserved on the external user immediately after validation. Any unused amount is refunded when the request is cancelled, fails, or finishes below the provisional estimate.
+
+## POST /external_users/upload_image_data
+
+Upload image data URLs for an external user before calling `image_list_to_video`.
+
+```json
+{
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123",
+    "external_app_id": "app_abc"
+  },
+  "input": {
+    "image_data": [
+      "data:image/png;base64,..."
+    ]
+  }
+}
+```
+
+Success response:
+
+```json
+{
+  "image_urls": [
+    "https://static.samsar.one/..."
+  ]
+}
+```
+
+## POST /external_users/image_list_to_video
+
+Create a video from an ordered list of images attributed to an external user.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/image_list_to_video \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user": {
+      "provider": "whop",
+      "external_user_id": "usr_123",
+      "external_app_id": "app_abc"
+    },
+    "input": {
+      "image_urls": [
+        "https://cdn.example.com/frame1.png",
+        "https://cdn.example.com/frame2.png"
+      ],
+      "prompt": "Fast product reveal pacing",
+      "video_model": "RUNWAYML",
+      "aspect_ratio": "9:16",
+      "metadata": {
+        "campaign": "drop-07"
+      },
+      "language": "en",
+      "enable_subtitles": true,
+      "font_key": "Poppins",
+      "limit_single_narrator": false,
+      "add_narrator_avatar": false
+    }
+  }'
+```
+
+`input` accepts the same image-list parameters as `POST /video/image_list_to_video`, including URL-string or object `image_urls`, `video_model`, `aspect_ratio`, `language`, `backingtrack_model` / `music_provider` (`LYRIA3` or `ELEVENLABS_MUSIC`), `tts_model` / `tts_provider` (`ELEVENLABS`, `OPENAI`, or `GOOGLE`), `speakerOptions` / `speaker_options` for request-level speaker selection, `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), `enable_subtitles`, `font_key`, provided outro image fields, generated QR outro fields, express CTA generation (`express_cta_generation` with one `cta_url`), per-scene footer QR fields (`add_footer_animation` with `footer_metadata`), `limit_single_narrator`, and `add_narrator_avatar`. `video_model_sub_type` is not part of the request shape. Legacy `LYRIA2` backing-track values are treated as `LYRIA3`. `video_model` is optional and supports `VEO3.1I2V`, `VEO3.1I2VFAST`, `COSMOS3SUPERI2V`, `SEEDANCEI2V`, `KLINGIMGTOVID3PRO`, `HAPPYHORSEI2V`, and `RUNWAYML`; if omitted, it defaults to `RUNWAYML`. `aspect_ratio` supports `16:9` and `9:16` and defaults to `16:9`. `add_narrator_avatar` automatically enables `limit_single_narrator`.
+
+Use only one outro mode in a request: either `outro_image_url` with optional `add_outro_animation` / `add_outro_focus_area`, `generate_outro_image: true` with `cta_url`, or `express_cta_generation: true` with one `cta_url`. Express CTA generation omits manual CTA text and footer metadata; Samsar generates concise footer CTA titles from each scene and clean outro CTA text from the session context before rendering. Billing uses the same standard image-list rates as the standard route: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec. Narrator avatar generation adds 4 credits/sec when `add_narrator_avatar` is true; express CTA generation adds 1 credit/sec when `express_cta_generation` is true. `x-credits-charged` and `x-credits-remaining` are returned on acceptance when available, just like the standard image-list flow.
+
+## GET /external_users/status
+
+Poll an external request until completion.
+
+```bash
+curl "https://api.samsar.one/v1/external_users/status?request_id=extreq_123" \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************"
+```
+
+Success response:
+
+```json
+{
+  "request_id": "extreq_123",
+  "session_id": "extreq_123",
+  "external_request_id": "extreq_123",
+  "upstream_session_id": "66ff...",
+  "status": "COMPLETED",
+  "result_url": "https://static.samsar.one/...",
+  "has_subtitles": true,
+  "result_language": "en",
+  "creditsCharged": 750,
+  "creditsRefunded": 0,
+  "remainingCredits": 4250
+}
+```
+
+Completed video responses include `has_subtitles` and `result_language` when the upstream video session has that metadata. If a generation fails or completes with a refund, the external request record is updated to reflect the refund.
+
+## GET /external_users/requests
+
+Fetch recent render requests for one external user.
+
+```bash
+curl "https://api.samsar.one/v1/external_users/requests?provider=whop&external_user_id=usr_123&external_app_id=app_abc&limit=12" \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************"
+```
+
+Success response:
+
+```json
+{
+  "requests": [
+    {
+      "request_id": "extreq_123",
+      "route_key": "text_to_video",
+      "status": "COMPLETED",
+      "prompt": "A cinematic teaser for a new sneaker drop",
+      "video_url": "https://static.samsar.one/...",
+      "credits_charged": 750,
+      "credits_refunded": 0,
+      "remaining_credits": 4250,
+      "is_published": true,
+      "published_title": "Sneaker teaser"
+    }
+  ],
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123"
+  }
+}
+```
+
+## POST /external_users/publish
+
+Publish a completed external-user request to the public library/feed.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/publish \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "extreq_123",
+    "title": "Sneaker teaser",
+    "description": "Launch-day vertical cut",
+    "tags": ["launch", "footwear"]
+  }'
+```
+
+Success response:
+
+```json
+{
+  "request": {
+    "request_id": "extreq_123",
+    "is_published": true,
+    "published_title": "Sneaker teaser"
+  },
+  "publication": {
+    "_id": "pub_123"
+  }
+}
+```
+
+## POST /external_users/archive
+
+Archive an external-user request. This costs no credits and also removes the video from publications if it was already published.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/archive \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "extreq_123"
+  }'
+```
+
+Success response:
+
+```json
+{
+  "request": {
+    "request_id": "extreq_123",
+    "status": "ARCHIVED"
+  }
+}
+```
+
+## GET /external_users/credits
+
+Fetch the remaining credits for one external user plus their attribution summary.
+
+```bash
+curl "https://api.samsar.one/v1/external_users/credits?provider=whop&external_user_id=usr_123&external_app_id=app_abc" \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************"
+```
+
+Success response:
+
+```json
+{
+  "remainingCredits": 4920,
+  "lastTopUp": {
+    "amountPaidCents": 5000,
+    "creditsApplied": 5000
+  },
+  "externalUser": {
+    "provider": "whop",
+    "external_user_id": "usr_123",
+    "generation_credits": 4920,
+    "total_requests": 4,
+    "total_credits_used": 1820,
+    "total_credits_refunded": 150,
+    "total_credits_purchased": 5000
+  }
+}
+```
+
+## POST /external_users/credits/grant
+
+Manually grant credits to an external user. This also credits the shared platform account internally so upstream requests stay in sync.
+
+```bash
+curl -X POST https://api.samsar.one/v1/external_users/credits/grant \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_user": {
+      "provider": "whop",
+      "external_user_id": "usr_123",
+      "external_app_id": "app_abc"
+    },
+    "input": {
+      "credits": 1000
+    }
+  }'
+```
+
+Success response:
+
+```json
+{
+  "creditsGranted": 1000,
+  "remainingCredits": 1000,
+  "internalRemainingCredits": 12000,
+  "externalUser": {
+    "provider": "whop",
+    "external_user_id": "usr_123",
+    "generation_credits": 1000
+  }
+}
+```
+
+## POST /external_users/credits/recharge
+
+Create a Stripe checkout link for an external-user credit purchase.
+
+```json
+{
+  "external_user": {
+    "provider": "whop",
+    "external_user_id": "usr_123",
+    "external_app_id": "app_abc"
+  },
+  "input": {
+    "credits": 2500
+  }
+}
+```
+
+Success response:
+
+```json
+{
+  "external_payment_id": "extpay_123",
+  "url": "https://checkout.stripe.com/c/pay/...",
+  "checkoutSessionId": "cs_test_123",
+  "paymentIntentId": "pi_123",
+  "paymentStatusEndpoint": "/v1/external_users/payment_status",
+  "credits": 2500,
+  "amountUsd": 25,
+  "amountCents": 2500,
+  "currency": "USD"
+}
+```
+
+## GET /external_users/payment_status
+
+Poll the status of an external-user-attributed recharge.
+
+```bash
+curl "https://api.samsar.one/v1/external_users/payment_status?external_payment_id=extpay_123" \
+  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "x-external-user-api-key: YOUR_EXTERNAL_USER_API_KEY_****************"
+```
+
+Success response:
+
+```json
+{
+  "external_payment_id": "extpay_123",
+  "status": "succeeded",
+  "mode": "payment",
+  "checkoutSessionId": "cs_test_123",
+  "paymentIntentId": "pi_123",
+  "amountCents": 2500,
+  "currency": "usd",
+  "remainingCredits": 5000
+}
+```
+
+When payment succeeds, credits are applied to the external user’s `generationCredits`. The underlying platform API key is not returned to the caller.
