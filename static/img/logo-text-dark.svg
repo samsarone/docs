@@ -2,22 +2,22 @@
   <defs>
     <linearGradient id="pillDark" x1="18" y1="4" x2="222" y2="48" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0F172A" />
-      <stop offset="1" stop-color="#0B1220" />
+      <stop offset="1" stop-color="#140C16" />
     </linearGradient>
     <linearGradient id="accentDark" x1="118" y1="12" x2="208" y2="36" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#67D4FF" />
-      <stop offset="1" stop-color="#1F7AEC" />
+      <stop stop-color="#FDBA74" />
+      <stop offset="1" stop-color="#FDA4AF" />
     </linearGradient>
   </defs>
   <style>
     .wordmark {
       font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
       font-weight: 900;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
     }
   </style>
-  <rect x="1" y="1" width="238" height="50" rx="12" fill="url(#pillDark)" stroke="#1F2B3F" stroke-opacity="0.65" />
+  <rect x="1" y="1" width="238" height="50" rx="12" fill="url(#pillDark)" stroke="#FB7185" stroke-opacity="0.34" />
   <text class="wordmark" x="22" y="31" font-size="18" fill="#E6EEF8">SAMSAR</text>
   <text class="wordmark" x="132" y="31" font-size="18" fill="url(#accentDark)">DOCS</text>
 </svg>

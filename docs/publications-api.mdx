@@ -1,0 +1,187 @@
+---
+title: Publications API
+description: "Publish, edit, and revoke completed Samsar video sessions on the public feed through free API routes."
+image: img/og/publications-api.png
+sidebar_position: 6
+slug: /publications
+sidebar_label: Publications API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# Publications API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY_OR_AUTH_TOKEN>`
+- Customer sub-account auth: `x-customer-sub-account-api-key: <CUSTOMER_SUB_ACCOUNT_INTERNAL_API_KEY>`
+- Content-Type: `application/json`
+- Billing: free. These endpoints do not deduct credits.
+
+Use these endpoints when an external application needs to publish, edit, or revoke a public publication for a completed `samsar-js` video session. The authenticated account must own the target video session. A session can only be published after it has a final video URL.
+
+## Publication fields
+
+Samsar infers the final video URL and many defaults from the session. Send the fields your app owns or cannot infer from the session:
+
+```json
+{
+  "session_id": "66ff...",
+  "title": "Running shoe teaser",
+  "description": "Launch-day vertical cut",
+  "tags": ["launch", "footwear"],
+  "creator_handle": "acme",
+  "slug": "running-shoe-teaser",
+  "image_hash": "optional-image-hash",
+  "splash_image": "https://cdn.example.com/splash.png",
+  "image_model": "GPTIMAGE2",
+  "video_model": "RUNWAYML",
+  "original_prompt": "A fast launch video for a new running shoe",
+  "aspect_ratio": "9:16",
+  "has_subtitles": true,
+  "session_language": "en",
+  "language_string": "English"
+}
+```
+
+Alias support:
+
+- `session_id`, `sessionId`, `video_session_id`, `videoSessionId`, or `id`
+- `aspect_ratio` or `aspectRatio`
+- `creator_handle` or `creatorHandle`
+- `image_hash` or `imageHash`
+- `splash_image` or `splashImage`
+- `image_model` or `imageModel`
+- `video_model` or `videoModel`
+- `original_prompt`, `originalPrompt`, or `prompt`
+- `session_language`, `sessionLanguage`, `language`, or `language_code`
+- `language_string` or `languageString`
+- `has_subtitles`, `hasSubtitles`, `enable_subtitles`, or `enableSubtitles`
+
+Request bodies can be sent flat or nested under `input`.
+
+## POST /publications/publish
+
+Create or update a public publication for a completed session.
+
+```bash
+curl -X POST https://api.samsar.one/v1/publications/publish \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "66ff...",
+    "title": "Running shoe teaser",
+    "description": "Launch-day vertical cut",
+    "tags": ["launch", "footwear"],
+    "creator_handle": "acme"
+  }'
+```
+
+Success response:
+
+```json
+{
+  "created": true,
+  "publication": {
+    "publication_id": "67aa...",
+    "session_id": "66ff...",
+    "video_url": "https://static.samsar.one/video/66ff/final.mp4",
+    "title": "Running shoe teaser",
+    "description": "Launch-day vertical cut",
+    "tags": ["launch", "footwear"],
+    "creator_handle": "acme",
+    "aspect_ratio": "9:16",
+    "has_subtitles": true,
+    "language": "en",
+    "session_language": "en",
+    "language_string": "English"
+  },
+  "session": {
+    "session_id": "66ff...",
+    "is_published": true,
+    "published_publication_id": "67aa...",
+    "published_video_url": "https://static.samsar.one/video/66ff/final.mp4"
+  }
+}
+```
+
+## POST /publications/edit
+
+Edit an existing publication for a session. Omitted fields keep their current publication values.
+
+```bash
+curl -X POST https://api.samsar.one/v1/publications/edit \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "66ff...",
+    "title": "Running shoe teaser - updated",
+    "tags": ["launch", "footwear", "campaign"]
+  }'
+```
+
+`404` is returned when the session exists but has no publication yet.
+
+## POST /publications/revoke
+
+Remove a session publication from the public feed and clear the published fields on the session.
+
+```bash
+curl -X POST https://api.samsar.one/v1/publications/revoke \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "66ff..."
+  }'
+```
+
+Success response:
+
+```json
+{
+  "revoked": true,
+  "publication_id": "67aa...",
+  "session": {
+    "session_id": "66ff...",
+    "is_published": false
+  }
+}
+```
+
+## REST aliases
+
+The same operations are also available as session-centric routes:
+
+- `POST /publications/session/:sessionId`
+- `PATCH /publications/session/:sessionId`
+- `DELETE /publications/session/:sessionId`
+
+## Error responses
+
+- `400` missing or invalid `session_id`
+- `401` invalid API key, customer sub-account key, or auth token
+- `403` the session does not belong to the authenticated actor
+- `404` session or publication not found
+- `409` the session has no final video URL yet
+
+## samsar-js
+
+```ts
+import SamsarClient from 'samsar-js';
+
+const samsar = new SamsarClient({ apiKey: process.env.SAMSAR_API_KEY! });
+
+await samsar.publishPublication({
+  session_id: '66ff...',
+  title: 'Running shoe teaser',
+  tags: ['launch', 'footwear'],
+});
+
+await samsar.editPublication({
+  session_id: '66ff...',
+  title: 'Running shoe teaser - updated',
+});
+
+await samsar.revokePublication('66ff...');
+```

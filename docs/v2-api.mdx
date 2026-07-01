@@ -98,6 +98,8 @@ The `/v2` routes are designed for clients where either an internal Samsar accoun
 | `POST /v2/update_footer_image` | Update or remove an existing video footer CTA. |
 | `POST /v2/join_videos` | Join videos into one output. |
 | `POST /v2/video/clone` | Deep-copy a completed video session and render a new final video URL. |
+| `POST /v2/reroll-layers` | Reroll selected 1-based layers from image generation, then rerender the session. |
+| `POST /v2/video/reroll-layers` | Alias for `POST /v2/reroll-layers`. |
 
 ### Publishing routes
 
@@ -343,7 +345,7 @@ curl -X POST "https://api.samsar.one/v2/image_list_to_video" \
   }'
 ```
 
-For `/v2/image_list_to_video`, provide `cta_url` to add a server-generated CTA outro. Set `express_cta_generation: true` with one `cta_url` when you want Samsar to generate concise per-scene footer CTA titles from the image payload and clean outro CTA text from the session context. Use `backingtrack_model` or `music_provider` to choose `LYRIA3` for Google Lyria 3 Pro native backing tracks or `ELEVENLABS_MUSIC` for ElevenLabs Music; legacy `LYRIA2` values are treated as `LYRIA3`. Use `tts_model` or `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, and use `speakerOptions` or `speaker_options` when the request should override account speaker settings for that TTS provider. Use `inference_model` or `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro`; omit it to use the account default inference model. `add_outro_animation` is optional and defaults to `true`; supplied outro image URLs and manual outro focus dimensions are not part of the v2 image-list request shape. `limit_single_narrator` keeps all narration under one narrator identity. `add_narrator_avatar` automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, overlays it bottom-center or centered in the footer row, and adds 4 credits/sec. The same standard model prices apply as `/v1`: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec; express CTA generation adds 1 credit/sec, and outro add/update plus footer update routes are 75 credits/request.
+For `/v2/image_list_to_video`, provide `cta_url` to add a server-generated QR CTA outro, or provide `outro_cta_image` to add a server-generated CTA outro with a supplied center logo/CTA image. `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`; `middle_image` accepts a public image URL or image data and is resized into the same center area used by QR outros without changing aspect ratio. Set `express_cta_generation: true` with one `cta_url` when you want Samsar to generate concise per-scene footer CTA titles from the image payload and clean outro CTA text from the session context. Use `backingtrack_model` or `music_provider` to choose `LYRIA3` for Google Lyria 3 Pro native backing tracks or `ELEVENLABS_MUSIC` for ElevenLabs Music; legacy `LYRIA2` values are treated as `LYRIA3`. Use `tts_model` or `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, and use `speakerOptions` or `speaker_options` when the request should override account speaker settings for that TTS provider. Use `inference_model` or `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro`; omit it to use the account default inference model. `add_outro_animation` is optional and defaults to `true`; supplied full outro image URLs and manual outro focus dimensions are not part of the v2 image-list request shape. `limit_single_narrator` keeps all narration under one narrator identity. `add_narrator_avatar` automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, overlays it bottom-center or centered in the footer row, and adds 4 credits/sec. The same standard model prices apply as `/v1`: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec; express CTA generation adds 1 credit/sec, and outro add/update plus footer update routes are 75 credits/request.
 
 ### V2 image edit routes
 
@@ -680,6 +682,23 @@ curl -X POST "https://api.samsar.one/v2/video/clone" \
 ```
 
 `/v2/video/clone` is free for an authenticated user who owns the source session. It copies the session data and local generated assets into a new session, marks all upstream generation stages complete, and queues only the final `video_generation` stage so the clone receives its own rendered video path and URL. Poll `/v2/status?request_id=<new_session_id>` until it returns the standard completed video payload with `result_url`, `has_subtitles`, and `result_language`.
+
+**Reroll layers example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/reroll-layers" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "layer_indexes": [3, 6, 11]
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+`/v2/reroll-layers` and `/v2/video/reroll-layers` update the same owned session in place. The selected 1-based layers restart from image generation, then required AI-video and lip-sync/sound-effect work runs for those layers before frame/outro/final video generation reruns for the whole session. Credits are the selected image-generation costs plus the selected layers' AI-video stage credits; send `quote_only: true` in `input` to estimate without charging.
 
 ## Assistant and utilities
 

@@ -75,7 +75,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Replace with your project's social card
-      image: 'img/samsar-social-card.png',
+      image: 'img/og/samsar-docs-overview.png',
       colorMode: {
         defaultMode: 'dark',
         respectPrefersColorScheme: true,

@@ -21,14 +21,35 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Removing existing build directory..."
-rm -rf build
+if [[ -n "${BUILD_DIR:-}" ]]; then
+  echo "Preparing build directory ${BUILD_DIR}..."
+  rm -rf "${BUILD_DIR}"
+  mkdir -p "${BUILD_DIR}"
+  CLEAN_BUILD_DIR="false"
+else
+  BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/samsar-docs-build.XXXXXX")"
+  CLEAN_BUILD_DIR="true"
+fi
+
+cleanup() {
+  if [[ "${CLEAN_BUILD_DIR}" == "true" ]]; then
+    rm -rf "${BUILD_DIR}"
+  fi
+}
+trap cleanup EXIT
 
 echo "Building site..."
-npm run build
+npm run build -- --out-dir "${BUILD_DIR}"
 
-echo "Uploading build to s3://${S3_BUCKET}..."
-aws s3 sync build/ "s3://${S3_BUCKET}" --delete
+echo "Uploading immutable hashed assets to s3://${S3_BUCKET}/assets..."
+aws s3 sync "${BUILD_DIR}/assets/" "s3://${S3_BUCKET}/assets/" \
+  --cache-control "public, max-age=31536000, immutable"
+
+echo "Uploading HTML and static files to s3://${S3_BUCKET}..."
+aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET}" \
+  --delete \
+  --exclude "assets/*" \
+  --cache-control "no-cache, no-store, must-revalidate"
 
 echo "Invalidating CloudFront distribution ${DIST_ID}..."
 aws cloudfront create-invalidation --distribution-id "${DIST_ID}" --paths "/*"

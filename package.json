@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "generate:llms": "node ./scripts/generate-llms-txt.mjs",
+    "prestart": "node ./scripts/generate-llms-txt.mjs",
+    "prebuild": "node ./scripts/generate-llms-txt.mjs",
+    "predeploy": "node ./scripts/generate-llms-txt.mjs",
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
     "build": "docusaurus build",
@@ -41,5 +45,6 @@
   },
   "engines": {
     "node": ">=18.0"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }

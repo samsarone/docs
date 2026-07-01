@@ -1,0 +1,240 @@
+---
+title: External Requests API
+description: "Use a Samsar API key as a central fallback provider for chat, image, video, and deployment onboarding requests."
+image: img/og/external-requests-api.png
+sidebar_position: 6
+slug: /external-requests
+sidebar_label: External Requests API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# External Requests API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one`
+- Canonical route prefix: `/v2/external`
+- Auth: `Authorization: Bearer <SAMSAR_API_KEY>`
+- Content-Type: `application/json`
+- Billing: requests are billed to the Samsar account behind the API key using the same model pricing as the corresponding Studio action.
+- Compatibility: the legacy `/external/*` aliases may exist on some deployments, but new integrations should use `/v2/external/*`.
+
+Use this surface when a deployed SamsarOne environment wants to call the central Samsar service as a fallback provider. Native provider credentials can still be used directly by a deployment; when they are present, they override the corresponding model settings for that deployment.
+
+This is different from `/external_users/*`. External users track per-customer credits, history, and login state. External requests are one-off provider-style calls authenticated by a Samsar API key.
+
+## Validate a Samsar API key
+
+`GET /v2/external/api_key/validate`
+
+```bash
+curl "https://api.samsar.one/v2/external/api_key/validate" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+Success response:
+
+```json
+{
+  "valid": true,
+  "authType": "api_key",
+  "email": "admin@example.com",
+  "remainingCredits": 12000
+}
+```
+
+## Provider capabilities
+
+`GET /v2/external/providers/capabilities`
+
+Returns the provider, model, and action capability map used by deployment onboarding.
+
+```bash
+curl "https://api.samsar.one/v2/external/providers/capabilities"
+```
+
+## Validate deployment providers
+
+`POST /v2/external/providers/validate`
+
+Use this from the local deployment wizard to validate optional provider credentials before enabling model settings. The SDK sends credentials only to the local processor or configured Samsar API host; do not persist provider secrets in client code.
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/providers/validate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "samsarApiKey": "sk_live_...",
+    "openaiApiKey": "sk-...",
+    "falApiKey": "fal_...",
+    "runwayApiKey": "rw_..."
+  }'
+```
+
+Success response:
+
+```json
+{
+  "providers": {
+    "samsar": {
+      "ok": true,
+      "status": "validated",
+      "remainingCredits": 12000
+    }
+  },
+  "available": {
+    "providers": ["samsar"],
+    "models": ["gpt-5.5", "gemini-3.1-pro"],
+    "actions": ["chat", "image", "video", "audio"]
+  }
+}
+```
+
+## Chat
+
+`POST /v2/external/chat` and `POST /v2/external/chat/completions`
+
+These endpoints accept OpenAI-compatible chat completion payloads. `/chat/completions` is the preferred path for OpenAI SDK compatibility.
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/chat/completions" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.5",
+    "messages": [
+      { "role": "user", "content": "Write a launch caption for a travel reel." }
+    ],
+    "max_tokens": 300
+  }'
+```
+
+Responses include standard chat completion fields. Credit usage is also returned through response headers when available:
+
+- `x-credits-charged`
+- `x-credits-remaining`
+
+## Image
+
+`POST /v2/external/image/{image_route}`
+
+The external image surface mirrors the existing Image API under the `/v2/external/image` prefix. Common routes include:
+
+- `assign_title`
+- `enhance`
+- `remove_branding`
+- `add_image_set`
+- `receipt_templates/create`
+- `receipt_templates/query`
+- `create_rollup_banner`
+
+Example:
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/image/enhance" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_url": "https://cdn.example.com/photo.png",
+    "resolution": "1k"
+  }'
+```
+
+Async image routes return a `request_id`. Poll:
+
+```bash
+curl "https://api.samsar.one/v2/external/image/status?request_id=img_enh_123" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+## Video
+
+`POST /v2/external/video/{video_route}`
+
+The external video surface mirrors the existing Video API under the `/v2/external/video` prefix. Common routes include:
+
+- `text_to_video`
+- `image_list_to_video`
+- `upload_image_data`
+- `update_outro_image`
+- `update_footer_image`
+- `add_outro_image`
+- `translate_video`
+- `join_videos`
+- `clone`
+
+Example:
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/video/text_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "prompt": "A cinematic product launch reel",
+      "image_model": "GPTIMAGE2",
+      "video_model": "RUNWAYML",
+      "duration": 10,
+      "aspect_ratio": "9:16",
+      "inference_model": "gpt-5.5"
+    },
+    "webhookUrl": "https://example.com/webhook"
+  }'
+```
+
+Poll:
+
+```bash
+curl "https://api.samsar.one/v2/external/video/status?request_id=66ff..." \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+## Audio
+
+`POST /v2/external/audio`
+
+This route is reserved. Current processor builds return `501` until the external audio request schema is finalized.
+
+## samsar-js
+
+```ts
+import SamsarClient from 'samsar-js';
+
+const samsar = new SamsarClient({ apiKey: process.env.SAMSAR_API_KEY! });
+
+await samsar.validateV2ExternalSamsarApiKey();
+
+const chat = await samsar.createV2ExternalChatCompletion({
+  model: 'gpt-5.5',
+  messages: [{ role: 'user', content: 'Write a concise product caption.' }],
+});
+
+const video = await samsar.createV2ExternalVideoRequestFromText({
+  prompt: 'A cinematic product launch reel',
+  image_model: 'GPTIMAGE2',
+  video_model: 'RUNWAYML',
+  duration: 10,
+});
+
+const status = await samsar.getV2ExternalVideoStatus(video.data.request_id!);
+
+await samsar.requestV2ExternalImage('enhance', {
+  image_url: 'https://cdn.example.com/photo.png',
+  resolution: '1k',
+});
+```
+
+The shorter aliases also use the v2 external routes:
+
+- `validateSamsarApiKey`
+- `getExternalProviderCapabilities`
+- `validateDeploymentProviders`
+- `createExternalChat`
+- `createExternalChatCompletion`
+- `requestExternalImage`
+- `requestExternalVideo`
+- `createExternalVideoRequestFromText`
+- `createExternalVideoRequestFromImageList`
+- `getExternalImageStatus`
+- `getExternalVideoStatus`
+- `requestExternalAudio`

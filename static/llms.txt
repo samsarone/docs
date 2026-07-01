@@ -1,6 +1,6 @@
 LLM_EXPORT_VERSION: 1
-GENERATED_AT_UTC: 2026-06-06T10:13:20.323Z
-DOC_COUNT: 11
+GENERATED_AT_UTC: 2026-07-01T05:52:41.640Z
+DOC_COUNT: 12
 
 === DOCUMENT START ===
 SOURCE_PATH: docs/api.mdx
@@ -44,7 +44,7 @@ import PlaygroundRail from '@site/src/components/PlaygroundRail';
 
 ## Pricing
 
-Credits are charged when a request is accepted. Standard `/video/text_to_video` and `/video/image_list_to_video` express models are billed per rendered second by model. Image-list `add_narrator_avatar` adds an optional **4 credits/sec** avatar generation stage, and image-list `express_cta_generation` adds an optional **1 credit/sec** CTA text-generation stage. Video model keys outside the documented supported values are not supported as default route model values. `/video/translate_video` and `/video/join_videos` are billed at a flat **3 credits/sec** based on the source/joined video duration. `/video/add_outro_image`, `/video/update_outro_image`, `/video/update_footer_image`, `/external_users/add_outro_image`, `/external_users/update_outro_image`, and `/external_users/update_footer_image` are billed at a flat **75 credits/request**. `/video/clone` and `/v2/video/clone` do not charge additional credits.
+Credits are charged when a request is accepted. Standard `/video/text_to_video` and `/video/image_list_to_video` express models are billed per rendered second by model. Image-list `add_narrator_avatar` adds an optional **4 credits/sec** avatar generation stage, and image-list `express_cta_generation` adds an optional **1 credit/sec** CTA text-generation stage. Video model keys outside the documented supported values are not supported as default route model values. `/video/translate_video` and `/video/join_videos` are billed at a flat **3 credits/sec** based on the source/joined video duration. `/video/add_outro_image`, `/video/update_outro_image`, `/video/update_footer_image`, `/external_users/add_outro_image`, `/external_users/update_outro_image`, and `/external_users/update_footer_image` are billed at a flat **75 credits/request**. `/video/reroll-layers` bills the selected image-generation requests plus the selected layers' AI-video stage credits. `/video/clone` and `/v2/video/clone` do not charge additional credits.
 
 | `video_model`       | Text-to-video credits/sec | Unit options (seconds) |
 | ------------------- | ------------------------- | ---------------------- |
@@ -94,6 +94,9 @@ That gives this per-model distribution:
 
 **Clone video**
 `POST /video/clone` and `POST /v2/video/clone` currently do not charge additional credits.
+
+**Reroll layers formula**
+`credits = selected_layer_count × image_generation_price + selected_layer_duration_seconds × ai_video_stage_rate`. Quote-only requests do not charge credits.
 
 **Add outro image formula**
 `credits = 75`
@@ -300,6 +303,11 @@ Submit a prompt-only request to start video generation. Webhooks are optional.
     "cta_text_top": "Scan to book",
     "cta_text_bottom": "Limited availability",
     "cta_logo": "https://cdn.example.com/logo-white.png",
+    "outro_cta_image": {
+      "top_text": "Shop the drop",
+      "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+      "bottom_text": "Limited availability"
+    },
     "add_footer_animation": true,
     "footer_metadata": [
       { "url": "https://example.com/book", "title": "Book now" }
@@ -318,7 +326,7 @@ Submit a prompt-only request to start video generation. Webhooks are optional.
 - `enable_subtitles` optional; defaults to `true`. Set to `false` to skip subtitle generation entirely.
 - `font_key` optional; must be supported for the chosen `language`. It sets both subtitle and speaker fonts. Use `GET /supported_fonts` or [/fonts](/fonts) to preview choices.
 - Provided outro image mode: set `outro_image_url` to append a custom outro frame. `add_outro_animation` is optional; when true, it applies a fade overlay during the outro. `add_outro_focus_area` requires `add_outro_animation: true` and a valid `outro_focust_area`.
-- Generated outro image mode: set `generate_outro_image: true` and provide `cta_url`. Samsar creates a QR-code outro image server-side from `cta_url`, optional `cta_text_top`, optional `cta_text_bottom`, and optional `cta_logo`. This mode automatically enables `add_outro_animation`, `add_outro_focus_area`, and computes `outro_focust_area`.
+- Generated outro image mode: set `generate_outro_image: true` and provide either `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image. `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`; `middle_image` accepts a public URL (`{ "url" }`, `{ "image_url" }`) or image data (`{ "data_url" }`, `{ "image_data", "mime_type" }`). Top-level `cta_text_top` and `cta_text_bottom` remain supported for generated outros. This mode automatically enables `add_outro_animation`, `add_outro_focus_area`, and computes `outro_focust_area`.
 - Footer QR mode: set `add_footer_animation: true` and provide `footer_metadata` with `{ "url", "title" }` items. A single item is applied to every generated scene; multiple items map by generated scene index. The frame processor renders the bottom CTA section only on layers where this option is enabled.
 - Use only one outro mode in a request. If `generate_outro_image` is true, omit `outro_image_url`, `add_outro_animation`, `add_outro_focus_area`, and `outro_focust_area` because Samsar derives those values.
 - `outro_focust_area` / `outro_focus_area` values are `{ x, y, width, height }` within the output canvas (`16:9` is `1792x1024`, `9:16` is `1024x1792`).
@@ -350,6 +358,29 @@ curl -X POST https://api.samsar.one/v1/video/text_to_video \
       "footer_metadata": [
         { "url": "https://example.com/tour", "title": "Book a demo" }
       ]
+    }
+  }'
+```
+
+**Sample request: generate CTA image outro with a center logo**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/text_to_video \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "prompt": "A cinematic launch teaser for a new product line",
+      "duration": 20,
+      "image_model": "GPTIMAGE2",
+      "video_model": "RUNWAYML",
+      "aspect_ratio": "9:16",
+      "generate_outro_image": true,
+      "outro_cta_image": {
+        "top_text": "Shop the drop",
+        "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+        "bottom_text": "Limited availability"
+      }
     }
   }'
 ```
@@ -401,6 +432,11 @@ Create a video from an ordered list of images. Samsar builds a narrative from th
     "cta_text_top": "Scan to book",
     "cta_text_bottom": "Limited availability",
     "cta_logo": "https://cdn.example.com/logo-white.png",
+    "outro_cta_image": {
+      "top_text": "Shop the drop",
+      "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+      "bottom_text": "Limited availability"
+    },
     "add_footer_animation": false,
     "footer_metadata": [
       { "url": "https://example.com/blue-lagoon", "title": "Blue Lagoon Tour" }
@@ -425,7 +461,7 @@ Create a video from an ordered list of images. Samsar builds a narrative from th
 - `limit_single_narrator` optional boolean; defaults to `false`. When true, Samsar keeps all narration under one narrator identity.
 - `add_narrator_avatar` optional boolean; defaults to `false`. When true, Samsar automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, and overlays the avatar video bottom-center or centered in the footer row when footer metadata is present.
 - Provided outro image mode: set `outro_image_url` to append a custom outro frame. `add_outro_animation` is optional; when true, it applies a fade-to-black overlay during the outro. `add_outro_focus_area` requires `add_outro_animation: true` and a valid `outro_focust_area`.
-- Generated outro image mode: set `generate_outro_image: true` and provide `cta_url`. Samsar creates a QR-code outro image server-side from the input images, `cta_url`, optional `cta_text_top`, optional `cta_text_bottom`, and optional `cta_logo`. This mode automatically enables `add_outro_animation`, `add_outro_focus_area`, and computes `outro_focust_area`.
+- Generated outro image mode: set `generate_outro_image: true` and provide either `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image. `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`; `middle_image` accepts a public URL (`{ "url" }`, `{ "image_url" }`) or image data (`{ "data_url" }`, `{ "image_data", "mime_type" }`). Top-level `cta_text_top` and `cta_text_bottom` remain supported for generated outros. This mode automatically enables `add_outro_animation`, `add_outro_focus_area`, and computes `outro_focust_area`.
 - Footer QR mode: set `add_footer_animation: true` and provide `footer_metadata` with one `{ "url", "title" }` item per image scene. Samsar generates one QR image per scene in the frame processor and renders a footer section on every frame with the title on the left and QR code on the right.
 - Express CTA generation mode: set `express_cta_generation: true` with one `cta_url` and omit `cta_text_top`, `cta_text_bottom`, and `footer_metadata`. Samsar generates concise per-scene footer CTA titles from the image scene payload and clean outro CTA text from the session context, then normalizes the request into the same generated-outro and footer payload shape before rendering. Compatibility aliases include `expressCtaGeneration`, `auto_generate_cta_text`, `autoGenerateCtaText`, `generate_cta_texts`, and `generateCtaTexts`.
 - Use only one outro mode in a request. If `generate_outro_image` or `express_cta_generation` is true, omit `outro_image_url`, `add_outro_animation`, `add_outro_focus_area`, and `outro_focust_area` because Samsar derives those values.
@@ -497,6 +533,32 @@ curl -X POST https://api.samsar.one/v1/video/image_list_to_video \
   }'
 ```
 
+**Sample request: generate CTA image outro with a center logo**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/image_list_to_video \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "image_urls": [
+        "https://cdn.example.com/frame1.png",
+        "https://cdn.example.com/frame2.png"
+      ],
+      "prompt": "Product launch teaser with a branded CTA outro",
+      "video_model": "RUNWAYML",
+      "aspect_ratio": "9:16",
+      "generate_outro_image": true,
+      "outro_cta_image": {
+        "top_text": "Shop the drop",
+        "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+        "bottom_text": "Limited availability"
+      }
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
 **Sample request: express CTA generation from one link**
 
 ```bash
@@ -539,7 +601,7 @@ curl -X POST https://api.samsar.one/v1/video/image_list_to_video \
 
 ## POST /external_users/text_to_video and /external_users/image_list_to_video
 
-External-user video creation routes accept the same `input` parameters as `/video/text_to_video` and `/video/image_list_to_video`, including generated QR outros (`generate_outro_image`, `cta_url`, CTA text/logo fields), image-list express CTA generation (`express_cta_generation` with `cta_url`), provided outro images, footer QR sections (`add_footer_animation`, `footer_metadata`), subtitle/font options, optional `speakerOptions`, optional `inference_model`, and image-list `video_model` / `aspect_ratio`, `limit_single_narrator`, and `add_narrator_avatar`.
+External-user video creation routes accept the same `input` parameters as `/video/text_to_video` and `/video/image_list_to_video`, including generated CTA outros (`generate_outro_image` with `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image), image-list express CTA generation (`express_cta_generation` with `cta_url`), provided outro images, footer QR sections (`add_footer_animation`, `footer_metadata`), subtitle/font options, optional `speakerOptions`, optional `inference_model`, and image-list `video_model` / `aspect_ratio`, `limit_single_narrator`, and `add_narrator_avatar`.
 
 Wrap the request with an `external_user` object. Responses return an external request/session id; either the returned `extreq_...` id or the normalized external id can be used with `/external_users/status`, `/external_users/add_outro_image`, `/external_users/update_outro_image`, `/external_users/update_footer_image`, `/external_users/translate_video`, and `/external_users/join_videos`.
 
@@ -572,7 +634,7 @@ Repeated video routes also perform server-side compatibility routing. If a main 
 
 ## POST /video/add_outro_image
 
-Clone an existing session, then add or replace the outro image in the cloned session and queue frame/video generation.
+Clone an existing session, then add or replace the outro image in the cloned session and queue frame/video generation. Use a provided full outro image, or ask Samsar to generate the outro from existing session image layers with either a QR center image or supplied center logo/CTA image.
 
 **Request body**
 
@@ -590,7 +652,10 @@ Clone an existing session, then add or replace the outro image in the cloned ses
 ```
 
 - `videoSessionId` required; must belong to the API key.
-- `outro_image_url` required; URL (or data URL) for the outro image.
+- `outro_image_url` required unless `generate_outro_image` is true; URL (or data URL) for a full outro image.
+- `generate_outro_image` optional boolean; when true, provide either `cta_url` or `outro_cta_image` and omit `outro_image_url`.
+- `cta_url` optional for generated outro mode; when provided, it is converted into a scannable QR code in the center image area.
+- `outro_cta_image` optional for generated outro mode; uses `{ "top_text", "middle_image", "bottom_text" }` and places `middle_image` directly in the same center area used by QR outros, resized without changing aspect ratio.
 - `add_outro_animation` optional boolean; when true, adds a fade-to-black overlay in the final outro layer.
 - `add_outro_focus_area` optional boolean; requires `add_outro_animation` and valid `outro_focust_area`.
 - `outro_focust_area` optional; `{ x, y, width, height }`, validated against the session canvas.
@@ -613,6 +678,26 @@ curl -X POST https://api.samsar.one/v1/video/add_outro_image \
       "add_outro_animation": true,
       "add_outro_focus_area": true,
       "outro_focust_area": { "x": 240, "y": 140, "width": 720, "height": 420 }
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+**Sample request: add generated CTA image outro**
+
+```bash
+curl -X POST https://api.samsar.one/v1/video/add_outro_image \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "generate_outro_image": true,
+      "outro_cta_image": {
+        "top_text": "Shop the drop",
+        "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+        "bottom_text": "Limited availability"
+      }
     },
     "webhookUrl": "https://example.com/video-webhook"
   }'
@@ -641,7 +726,7 @@ Clone an existing session that already has an outro layer, update that outro lay
 Use one of two modes:
 
 - Provided outro image mode: pass `outro_image_url` (or `outroImageUrl`, `new_outro_image_url`, `newOutroImageUrl`) as an HTTP(S) URL or image data URL.
-- Generated CTA outro mode: pass `generate_outro_image: true` with `cta_url`, or provide `cta_url` without an `outro_image_url`. Samsar builds a QR-code outro from the existing session image layers, places the QR focus crop and optional CTA text above the fade overlay, and derives the focus area server-side.
+- Generated CTA outro mode: pass `generate_outro_image: true` with either `cta_url` or `outro_cta_image`, or provide `cta_url` / `outro_cta_image` without an `outro_image_url`. With `cta_url`, Samsar builds a QR-code outro. With `outro_cta_image`, Samsar places the supplied logo/CTA image in the same center area, resized without changing aspect ratio. In both cases it derives the focus area server-side and keeps optional top/bottom CTA text above the fade overlay.
 
 **Provided outro image request body**
 
@@ -674,14 +759,32 @@ Use one of two modes:
 }
 ```
 
+**Generated CTA image outro request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4",
+    "generate_outro_image": true,
+    "outro_cta_image": {
+      "top_text": "Shop the drop",
+      "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+      "bottom_text": "Limited availability"
+    }
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
 - `videoSessionId` required; must belong to the API key.
 - `outro_image_url` required unless `generate_outro_image` is true.
-- `generate_outro_image` optional boolean; when true, `cta_url` is required and `outro_image_url` must be omitted. If `cta_url` is provided without `outro_image_url`, generated CTA outro mode is inferred.
-- `cta_url` required for generated CTA outro mode; must be HTTP(S). It is converted into a scannable QR code.
+- `generate_outro_image` optional boolean; when true, `cta_url` or `outro_cta_image` is required and `outro_image_url` must be omitted. If `cta_url` or `outro_cta_image` is provided without `outro_image_url`, generated CTA outro mode is inferred.
+- `cta_url` optional for generated CTA outro mode; must be HTTP(S). It is converted into a scannable QR code.
+- `outro_cta_image` optional for generated CTA outro mode; uses `{ "top_text", "middle_image", "bottom_text" }`. `middle_image` accepts a public URL (`{ "url" }`, `{ "image_url" }`) or image data (`{ "data_url" }`, `{ "image_data", "mime_type" }`).
 - `cta_text_top` optional; rendered near the top of the outro layer above the fade overlay.
 - `cta_text_bottom` optional; rendered near the bottom of the outro layer above the fade overlay.
-- `cta_logo` optional and accepted for compatibility with generated-outro requests.
-- `add_outro_animation` optional boolean. In generated CTA outro mode it defaults to true; when true, Samsar adds a black overlay that fades from 60% opacity to 0% while the QR focus crop and CTA text stay above it.
+- `cta_logo` optional and accepted for compatibility with QR generated-outro requests.
+- `add_outro_animation` optional boolean. In generated CTA outro mode it defaults to true; when true, Samsar adds a black overlay that fades from 60% opacity to 0% while the generated center image and CTA text stay above it.
 - `add_outro_focus_area` optional for provided outro image mode; requires `add_outro_animation` and valid `outro_focust_area`. Generated CTA outro mode calculates the focus area server-side.
 - Credits are billed at **75 credits per request**.
 
@@ -802,7 +905,8 @@ External-user equivalent of `/video/add_outro_image`. Pass the external user ide
 ```
 
 - `request_id` / `session_id` required; use the external request id returned by `/external_users/text_to_video` or `/external_users/image_list_to_video`.
-- `outro_image_url` required; URL or data URL for the outro image.
+- Supports the same provided-outro and generated CTA outro modes as `/video/add_outro_image`.
+- Generated CTA outro mode accepts `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image.
 - `add_outro_animation`, `add_outro_focus_area`, and `outro_focust_area` match `/video/add_outro_image`.
 - Credits are billed at **75 credits per request** against the external user.
 
@@ -821,9 +925,11 @@ External-user equivalent of `/video/update_outro_image`. Use this endpoint when 
   "input": {
     "request_id": "extreq_df04419ab0cf426e9b30891da71a9293",
     "generate_outro_image": true,
-    "cta_url": "https://example.com/book",
-    "cta_text_top": "Scan to book",
-    "cta_text_bottom": "Limited availability",
+    "outro_cta_image": {
+      "top_text": "Shop the drop",
+      "middle_image": { "url": "https://cdn.example.com/drop-logo.png" },
+      "bottom_text": "Limited availability"
+    },
     "add_outro_animation": true
   },
   "webhookUrl": "https://example.com/webhook"
@@ -832,7 +938,7 @@ External-user equivalent of `/video/update_outro_image`. Use this endpoint when 
 
 - `request_id` / `session_id` required; use the external request id returned by an external-user video route.
 - Supports the same provided-outro and generated CTA outro modes as `/video/update_outro_image`.
-- Generated CTA outro mode derives `add_outro_focus_area` and `outro_focust_area` server-side.
+- Generated CTA outro mode accepts `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image, then derives `add_outro_focus_area` and `outro_focust_area` server-side.
 - Credits are billed at **75 credits per request** against the external user.
 
 **Success response (200)**
@@ -940,6 +1046,67 @@ Poll `GET /status?request_id=<new_session_id>` or `GET /v2/status?request_id=<ne
 - `400` invalid/missing fields or source session has no completed video URL
 - `401` invalid API key
 - `404` session not found
+
+## POST /video/reroll-layers
+
+Reroll selected 1-based layers in an owned completed video session. The selected layers restart at image generation, then AI-video and lip-sync/sound-effect work runs as needed for those layers. Frame generation, generated outro tiles when present, and final video generation rerun for the whole session.
+
+`POST /v2/reroll-layers` and `POST /v2/video/reroll-layers` expose the same operation on the V2 route surface.
+
+**Request body**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4",
+    "layer_indexes": [3, 6, 11]
+  },
+  "webhookUrl": "https://example.com/webhook"
+}
+```
+
+- `videoSessionId` required; must be a video session that belongs to the authenticated user and is not currently rendering.
+- `layer_indexes` required; accepts positive 1-based layer indexes.
+- The route updates the same session in place and does not clone the video.
+- Quote-only requests with `quote_only: true` return the credit estimate without charging or queuing work.
+
+**Quote-only request**
+
+```json
+{
+  "input": {
+    "videoSessionId": "vid_a1b2c3d4",
+    "layer_indexes": [3, 6],
+    "quote_only": true
+  }
+}
+```
+
+**Success response (200)**
+
+```json
+{
+  "request_id": "vid_a1b2c3d4",
+  "session_id": "vid_a1b2c3d4",
+  "status": "PENDING",
+  "layer_indexes": [3, 6, 11],
+  "creditQuote": {
+    "layerCount": 3,
+    "totalCredits": 164,
+    "imageCredits": 92,
+    "aiVideoCredits": 72
+  },
+  "creditsCharged": 164
+}
+```
+
+**Error responses**
+
+- `400` invalid/missing fields, unsupported layer indexes, or missing image prompts
+- `401` invalid API key
+- `402` insufficient credits
+- `404` session not found
+- `409` session is currently rendering or paused
 
 ## POST /video/translate_video
 
@@ -2568,6 +2735,260 @@ CONTENT_END
 === DOCUMENT END ===
 
 === DOCUMENT START ===
+SOURCE_PATH: docs/external-requests-api.mdx
+METADATA:
+  title: External Requests API
+  description: Use a Samsar API key as a central fallback provider for chat, image, video, and deployment onboarding requests.
+  image: img/og/external-requests-api.png
+  sidebar_position: 6
+  slug: /external-requests
+  sidebar_label: External Requests API
+PRIMARY_HEADING: External Requests API
+CONTENT_START
+---
+title: External Requests API
+description: "Use a Samsar API key as a central fallback provider for chat, image, video, and deployment onboarding requests."
+image: img/og/external-requests-api.png
+sidebar_position: 6
+slug: /external-requests
+sidebar_label: External Requests API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# External Requests API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one`
+- Canonical route prefix: `/v2/external`
+- Auth: `Authorization: Bearer <SAMSAR_API_KEY>`
+- Content-Type: `application/json`
+- Billing: requests are billed to the Samsar account behind the API key using the same model pricing as the corresponding Studio action.
+- Compatibility: the legacy `/external/*` aliases may exist on some deployments, but new integrations should use `/v2/external/*`.
+
+Use this surface when a deployed SamsarOne environment wants to call the central Samsar service as a fallback provider. Native provider credentials can still be used directly by a deployment; when they are present, they override the corresponding model settings for that deployment.
+
+This is different from `/external_users/*`. External users track per-customer credits, history, and login state. External requests are one-off provider-style calls authenticated by a Samsar API key.
+
+## Validate a Samsar API key
+
+`GET /v2/external/api_key/validate`
+
+```bash
+curl "https://api.samsar.one/v2/external/api_key/validate" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+Success response:
+
+```json
+{
+  "valid": true,
+  "authType": "api_key",
+  "email": "admin@example.com",
+  "remainingCredits": 12000
+}
+```
+
+## Provider capabilities
+
+`GET /v2/external/providers/capabilities`
+
+Returns the provider, model, and action capability map used by deployment onboarding.
+
+```bash
+curl "https://api.samsar.one/v2/external/providers/capabilities"
+```
+
+## Validate deployment providers
+
+`POST /v2/external/providers/validate`
+
+Use this from the local deployment wizard to validate optional provider credentials before enabling model settings. The SDK sends credentials only to the local processor or configured Samsar API host; do not persist provider secrets in client code.
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/providers/validate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "samsarApiKey": "sk_live_...",
+    "openaiApiKey": "sk-...",
+    "falApiKey": "fal_...",
+    "runwayApiKey": "rw_..."
+  }'
+```
+
+Success response:
+
+```json
+{
+  "providers": {
+    "samsar": {
+      "ok": true,
+      "status": "validated",
+      "remainingCredits": 12000
+    }
+  },
+  "available": {
+    "providers": ["samsar"],
+    "models": ["gpt-5.5", "gemini-3.1-pro"],
+    "actions": ["chat", "image", "video", "audio"]
+  }
+}
+```
+
+## Chat
+
+`POST /v2/external/chat` and `POST /v2/external/chat/completions`
+
+These endpoints accept OpenAI-compatible chat completion payloads. `/chat/completions` is the preferred path for OpenAI SDK compatibility.
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/chat/completions" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.5",
+    "messages": [
+      { "role": "user", "content": "Write a launch caption for a travel reel." }
+    ],
+    "max_tokens": 300
+  }'
+```
+
+Responses include standard chat completion fields. Credit usage is also returned through response headers when available:
+
+- `x-credits-charged`
+- `x-credits-remaining`
+
+## Image
+
+`POST /v2/external/image/{image_route}`
+
+The external image surface mirrors the existing Image API under the `/v2/external/image` prefix. Common routes include:
+
+- `assign_title`
+- `enhance`
+- `remove_branding`
+- `add_image_set`
+- `receipt_templates/create`
+- `receipt_templates/query`
+- `create_rollup_banner`
+
+Example:
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/image/enhance" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_url": "https://cdn.example.com/photo.png",
+    "resolution": "1k"
+  }'
+```
+
+Async image routes return a `request_id`. Poll:
+
+```bash
+curl "https://api.samsar.one/v2/external/image/status?request_id=img_enh_123" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+## Video
+
+`POST /v2/external/video/{video_route}`
+
+The external video surface mirrors the existing Video API under the `/v2/external/video` prefix. Common routes include:
+
+- `text_to_video`
+- `image_list_to_video`
+- `upload_image_data`
+- `update_outro_image`
+- `update_footer_image`
+- `add_outro_image`
+- `translate_video`
+- `join_videos`
+- `clone`
+
+Example:
+
+```bash
+curl -X POST "https://api.samsar.one/v2/external/video/text_to_video" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "prompt": "A cinematic product launch reel",
+      "image_model": "GPTIMAGE2",
+      "video_model": "RUNWAYML",
+      "duration": 10,
+      "aspect_ratio": "9:16",
+      "inference_model": "gpt-5.5"
+    },
+    "webhookUrl": "https://example.com/webhook"
+  }'
+```
+
+Poll:
+
+```bash
+curl "https://api.samsar.one/v2/external/video/status?request_id=66ff..." \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+## Audio
+
+`POST /v2/external/audio`
+
+This route is reserved. Current processor builds return `501` until the external audio request schema is finalized.
+
+## samsar-js
+
+```ts
+import SamsarClient from 'samsar-js';
+
+const samsar = new SamsarClient({ apiKey: process.env.SAMSAR_API_KEY! });
+
+await samsar.validateV2ExternalSamsarApiKey();
+
+const chat = await samsar.createV2ExternalChatCompletion({
+  model: 'gpt-5.5',
+  messages: [{ role: 'user', content: 'Write a concise product caption.' }],
+});
+
+const video = await samsar.createV2ExternalVideoRequestFromText({
+  prompt: 'A cinematic product launch reel',
+  image_model: 'GPTIMAGE2',
+  video_model: 'RUNWAYML',
+  duration: 10,
+});
+
+const status = await samsar.getV2ExternalVideoStatus(video.data.request_id!);
+
+await samsar.requestV2ExternalImage('enhance', {
+  image_url: 'https://cdn.example.com/photo.png',
+  resolution: '1k',
+});
+```
+
+The shorter aliases also use the v2 external routes:
+
+- `validateSamsarApiKey`
+- `getExternalProviderCapabilities`
+- `validateDeploymentProviders`
+- `createExternalChat`
+- `createExternalChatCompletion`
+- `requestExternalImage`
+- `requestExternalVideo`
+- `createExternalVideoRequestFromText`
+- `createExternalVideoRequestFromImageList`
+- `getExternalImageStatus`
+- `getExternalVideoStatus`
+- `requestExternalAudio`
+CONTENT_END
+=== DOCUMENT END ===
+
+=== DOCUMENT START ===
 SOURCE_PATH: docs/external-users-api.mdx
 METADATA:
   title: External Users API
@@ -2966,7 +3387,7 @@ curl -X POST https://api.samsar.one/v1/external_users/text_to_video \
   }'
 ```
 
-`input` accepts the same text-to-video parameters as `POST /video/text_to_video`, including optional `backingtrack_model` / `music_provider`, optional `tts_model` / `tts_provider`, optional `speakerOptions` / `speaker_options` for request-level speaker selection, optional `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), provided outro image fields, generated QR outro fields (`generate_outro_image` with `cta_url`), and bottom CTA footer fields (`add_footer_animation` with `footer_metadata`). `video_model_sub_type` is not part of the request shape. Credits are reserved on the external user immediately after validation. Any unused amount is refunded when the request is cancelled, fails, or finishes below the provisional estimate.
+`input` accepts the same text-to-video parameters as `POST /video/text_to_video`, including optional `backingtrack_model` / `music_provider`, optional `tts_model` / `tts_provider`, optional `speakerOptions` / `speaker_options` for request-level speaker selection, optional `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), provided outro image fields, generated CTA outro fields (`generate_outro_image` with `cta_url` for a QR center image or `outro_cta_image` for a supplied center logo/CTA image), and bottom CTA footer fields (`add_footer_animation` with `footer_metadata`). `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`. `video_model_sub_type` is not part of the request shape. Credits are reserved on the external user immediately after validation. Any unused amount is refunded when the request is cancelled, fails, or finishes below the provisional estimate.
 
 ## POST /external_users/upload_image_data
 
@@ -3032,9 +3453,9 @@ curl -X POST https://api.samsar.one/v1/external_users/image_list_to_video \
   }'
 ```
 
-`input` accepts the same image-list parameters as `POST /video/image_list_to_video`, including URL-string or object `image_urls`, `video_model`, `aspect_ratio`, `language`, `backingtrack_model` / `music_provider` (`LYRIA3` or `ELEVENLABS_MUSIC`), `tts_model` / `tts_provider` (`ELEVENLABS`, `OPENAI`, or `GOOGLE`), `speakerOptions` / `speaker_options` for request-level speaker selection, `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), `enable_subtitles`, `font_key`, provided outro image fields, generated QR outro fields, express CTA generation (`express_cta_generation` with one `cta_url`), per-scene footer QR fields (`add_footer_animation` with `footer_metadata`), `limit_single_narrator`, and `add_narrator_avatar`. `video_model_sub_type` is not part of the request shape. Legacy `LYRIA2` backing-track values are treated as `LYRIA3`. `video_model` is optional and supports `VEO3.1I2V`, `VEO3.1I2VFAST`, `COSMOS3SUPERI2V`, `SEEDANCEI2V`, `KLINGIMGTOVID3PRO`, `HAPPYHORSEI2V`, and `RUNWAYML`; if omitted, it defaults to `RUNWAYML`. `aspect_ratio` supports `16:9` and `9:16` and defaults to `16:9`. `add_narrator_avatar` automatically enables `limit_single_narrator`.
+`input` accepts the same image-list parameters as `POST /video/image_list_to_video`, including URL-string or object `image_urls`, `video_model`, `aspect_ratio`, `language`, `backingtrack_model` / `music_provider` (`LYRIA3` or `ELEVENLABS_MUSIC`), `tts_model` / `tts_provider` (`ELEVENLABS`, `OPENAI`, or `GOOGLE`), `speakerOptions` / `speaker_options` for request-level speaker selection, `inference_model` / `inferenceModel` (`gpt-5.5` or `gemini-3.1-pro`; omitted uses the account default), `enable_subtitles`, `font_key`, provided outro image fields, generated CTA outro fields (`generate_outro_image` with `cta_url` or `outro_cta_image`), express CTA generation (`express_cta_generation` with one `cta_url`), per-scene footer QR fields (`add_footer_animation` with `footer_metadata`), `limit_single_narrator`, and `add_narrator_avatar`. `video_model_sub_type` is not part of the request shape. Legacy `LYRIA2` backing-track values are treated as `LYRIA3`. `video_model` is optional and supports `VEO3.1I2V`, `VEO3.1I2VFAST`, `COSMOS3SUPERI2V`, `SEEDANCEI2V`, `KLINGIMGTOVID3PRO`, `HAPPYHORSEI2V`, and `RUNWAYML`; if omitted, it defaults to `RUNWAYML`. `aspect_ratio` supports `16:9` and `9:16` and defaults to `16:9`. `add_narrator_avatar` automatically enables `limit_single_narrator`.
 
-Use only one outro mode in a request: either `outro_image_url` with optional `add_outro_animation` / `add_outro_focus_area`, `generate_outro_image: true` with `cta_url`, or `express_cta_generation: true` with one `cta_url`. Express CTA generation omits manual CTA text and footer metadata; Samsar generates concise footer CTA titles from each scene and clean outro CTA text from the session context before rendering. Billing uses the same standard image-list rates as the standard route: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec. Narrator avatar generation adds 4 credits/sec when `add_narrator_avatar` is true; express CTA generation adds 1 credit/sec when `express_cta_generation` is true. `x-credits-charged` and `x-credits-remaining` are returned on acceptance when available, just like the standard image-list flow.
+Use only one outro mode in a request: either `outro_image_url` with optional `add_outro_animation` / `add_outro_focus_area`, `generate_outro_image: true` with `cta_url` or `outro_cta_image`, or `express_cta_generation: true` with one `cta_url`. `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`; `middle_image` accepts a public image URL or image data and is rendered in the same center area used by generated QR outros. Express CTA generation omits manual CTA text and footer metadata; Samsar generates concise footer CTA titles from each scene and clean outro CTA text from the session context before rendering. Billing uses the same standard image-list rates as the standard route: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec. Narrator avatar generation adds 4 credits/sec when `add_narrator_avatar` is true; express CTA generation adds 1 credit/sec when `express_cta_generation` is true. `x-credits-charged` and `x-credits-remaining` are returned on acceptance when available, just like the standard image-list flow.
 
 ## GET /external_users/status
 
@@ -4768,6 +5189,8 @@ The `/v2` routes are designed for clients where either an internal Samsar accoun
 | `POST /v2/update_footer_image` | Update or remove an existing video footer CTA. |
 | `POST /v2/join_videos` | Join videos into one output. |
 | `POST /v2/video/clone` | Deep-copy a completed video session and render a new final video URL. |
+| `POST /v2/reroll-layers` | Reroll selected 1-based layers from image generation, then rerender the session. |
+| `POST /v2/video/reroll-layers` | Alias for `POST /v2/reroll-layers`. |
 
 ### Publishing routes
 
@@ -5013,7 +5436,7 @@ curl -X POST "https://api.samsar.one/v2/image_list_to_video" \
   }'
 ```
 
-For `/v2/image_list_to_video`, provide `cta_url` to add a server-generated CTA outro. Set `express_cta_generation: true` with one `cta_url` when you want Samsar to generate concise per-scene footer CTA titles from the image payload and clean outro CTA text from the session context. Use `backingtrack_model` or `music_provider` to choose `LYRIA3` for Google Lyria 3 Pro native backing tracks or `ELEVENLABS_MUSIC` for ElevenLabs Music; legacy `LYRIA2` values are treated as `LYRIA3`. Use `tts_model` or `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, and use `speakerOptions` or `speaker_options` when the request should override account speaker settings for that TTS provider. Use `inference_model` or `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro`; omit it to use the account default inference model. `add_outro_animation` is optional and defaults to `true`; supplied outro image URLs and manual outro focus dimensions are not part of the v2 image-list request shape. `limit_single_narrator` keeps all narration under one narrator identity. `add_narrator_avatar` automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, overlays it bottom-center or centered in the footer row, and adds 4 credits/sec. The same standard model prices apply as `/v1`: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec; express CTA generation adds 1 credit/sec, and outro add/update plus footer update routes are 75 credits/request.
+For `/v2/image_list_to_video`, provide `cta_url` to add a server-generated QR CTA outro, or provide `outro_cta_image` to add a server-generated CTA outro with a supplied center logo/CTA image. `outro_cta_image` uses `{ "top_text", "middle_image", "bottom_text" }`; `middle_image` accepts a public image URL or image data and is resized into the same center area used by QR outros without changing aspect ratio. Set `express_cta_generation: true` with one `cta_url` when you want Samsar to generate concise per-scene footer CTA titles from the image payload and clean outro CTA text from the session context. Use `backingtrack_model` or `music_provider` to choose `LYRIA3` for Google Lyria 3 Pro native backing tracks or `ELEVENLABS_MUSIC` for ElevenLabs Music; legacy `LYRIA2` values are treated as `LYRIA3`. Use `tts_model` or `tts_provider` to choose `ELEVENLABS`, `OPENAI`, or `GOOGLE` for speaker assignment, and use `speakerOptions` or `speaker_options` when the request should override account speaker settings for that TTS provider. Use `inference_model` or `inferenceModel` to choose `gpt-5.5` or `gemini-3.1-pro`; omit it to use the account default inference model. `add_outro_animation` is optional and defaults to `true`; supplied full outro image URLs and manual outro focus dimensions are not part of the v2 image-list request shape. `limit_single_narrator` keeps all narration under one narrator identity. `add_narrator_avatar` automatically enables `limit_single_narrator`, generates an influencer-style human narrator avatar suitable for the image-list narrative, overlays it bottom-center or centered in the footer row, and adds 4 credits/sec. The same standard model prices apply as `/v1`: `VEO3.1I2V` is 60 credits/sec, `VEO3.1I2VFAST` is 36 credits/sec, `COSMOS3SUPERI2V` is 20 credits/sec, `SEEDANCEI2V` is 30 credits/sec, `KLINGIMGTOVID3PRO` is 36 credits/sec, `HAPPYHORSEI2V` is 36 credits/sec, and `RUNWAYML` is 30 credits/sec; express CTA generation adds 1 credit/sec, and outro add/update plus footer update routes are 75 credits/request.
 
 ### V2 image edit routes
 
@@ -5350,6 +5773,23 @@ curl -X POST "https://api.samsar.one/v2/video/clone" \
 ```
 
 `/v2/video/clone` is free for an authenticated user who owns the source session. It copies the session data and local generated assets into a new session, marks all upstream generation stages complete, and queues only the final `video_generation` stage so the clone receives its own rendered video path and URL. Poll `/v2/status?request_id=<new_session_id>` until it returns the standard completed video payload with `result_url`, `has_subtitles`, and `result_language`.
+
+**Reroll layers example**
+
+```bash
+curl -X POST "https://api.samsar.one/v2/reroll-layers" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "videoSessionId": "vid_a1b2c3d4",
+      "layer_indexes": [3, 6, 11]
+    },
+    "webhookUrl": "https://example.com/video-webhook"
+  }'
+```
+
+`/v2/reroll-layers` and `/v2/video/reroll-layers` update the same owned session in place. The selected 1-based layers restart from image generation, then required AI-video and lip-sync/sound-effect work runs for those layers before frame/outro/final video generation reruns for the whole session. Credits are the selected image-generation costs plus the selected layers' AI-video stage credits; send `quote_only: true` in `input` to estimate without charging.
 
 ## Assistant and utilities
 

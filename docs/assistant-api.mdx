@@ -1,0 +1,230 @@
+---
+title: Assistant API
+description: "Call OpenAI-compatible assistant completions tied to Samsar sessions, system prompts, and multimodal outputs."
+image: img/og/assistant-api.png
+sidebar_position: 4
+slug: /assistant-api
+sidebar_label: Assistant API
+---
+
+import DocTopActions from '@site/src/components/DocTopActions';
+
+# Assistant API
+
+<DocTopActions />
+
+- Base URL: `https://api.samsar.one/v1`
+- Auth: `Authorization: Bearer <API_KEY>`
+- Compatible alias: `/api/v1/assistant/*` is also available if your integration expects that prefix.
+- Response style: synchronous, OpenAI-compatible Responses payloads, including text messages and multimodal tool outputs such as generated images.
+- Pricing:
+  - `POST /assistant/completion` is usage-based.
+  - Credits are calculated from the actual request size and generated output, converted using **100 credits = $1**, then multiplied by **2.5x**.
+  - The exact charge depends on conversation length, answer length, and whether you include richer multimodal inputs such as images.
+- No polling: the assistant response is returned in the same request.
+
+Use this API when you want OpenAI-style assistant behavior tied to an existing Samsar `session_id`. The assistant uses the customer account's configured assistant model and the account-level system prompt if one is set. If no custom system prompt exists, Samsar applies a minimal default assistant prompt. Reuse the same `session_id` across turns and Samsar will preserve the underlying OpenAI response chain, including image-generation turns.
+
+## POST /assistant/set_system_prompt
+
+Store or clear the account-level system prompt used for assistant completions.
+
+**Request body**
+
+```json
+{
+  "system_prompt": "You are the launch assistant for Acme. Keep answers concise, on-brand, and commercially practical."
+}
+```
+
+- `system_prompt` optional string.
+- Pass `null` or an empty string to clear the custom prompt and revert to Samsar's default prompt.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/assistant/set_system_prompt \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "system_prompt": "You are the launch assistant for Acme. Keep answers concise, on-brand, and commercially practical."
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "system_prompt": "You are the launch assistant for Acme. Keep answers concise, on-brand, and commercially practical.",
+  "model": "gpt-5.5",
+  "selected_assistant_model": "gpt-5.5"
+}
+```
+
+**Common errors**
+
+- `400` invalid payload.
+- `401` invalid API key.
+
+---
+
+## POST /assistant/completion
+
+Create a synchronous assistant response for an existing Samsar session. The request returns an OpenAI-compatible Responses payload so it can fit cleanly into modern OpenAI client flows.
+
+You must provide a `session_id`. You can optionally send fresh user input in the same request. If you omit `input`, the assistant responds from the existing session history.
+
+**Request body**
+
+```json
+{
+  "session_id": "67df0d8ebc4f9d0b7f4fd123",
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "input_text", "text": "Write a short product launch caption for this session." }
+      ]
+    }
+  ],
+  "max_output_tokens": 300
+}
+```
+
+- `session_id` required.
+- `input` optional:
+  - a string
+  - a single message object
+  - an array of message objects
+  - a multimodal content array such as `input_text` and `input_image`
+- `max_output_tokens`, `temperature`, `top_p`, `reasoning`, `metadata`, `tools`, and `tool_choice` are accepted when supported by the configured assistant model.
+- To enable assistant-generated images, pass `tools: [{ "type": "image_generation" }]`. If you want to force an image response for the turn, set `tool_choice` to `{ "type": "image_generation" }`.
+
+**Multimodal example**
+
+```json
+{
+  "session_id": "67df0d8ebc4f9d0b7f4fd123",
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "input_text", "text": "Describe the hero image and turn it into a headline." },
+        { "type": "input_image", "image_url": "https://cdn.example.com/launch-hero.png" }
+      ]
+    }
+  ]
+}
+```
+
+**Image generation example**
+
+```json
+{
+  "session_id": "67df0d8ebc4f9d0b7f4fd123",
+  "input": "Create a clean launch-poster image for this session.",
+  "tools": [
+    {
+      "type": "image_generation",
+      "size": "1024x1024",
+      "quality": "high"
+    }
+  ],
+  "tool_choice": {
+    "type": "image_generation"
+  }
+}
+```
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/assistant/completion \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "67df0d8ebc4f9d0b7f4fd123",
+    "input": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "input_text", "text": "Write a short product launch caption for this session." }
+        ]
+      }
+    ],
+    "max_output_tokens": 300
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "id": "resp_123",
+  "object": "response",
+  "created_at": 1773651000,
+  "status": "completed",
+  "model": "gpt-5.5",
+  "output_text": "Meet the new drop: sharp design, fast story, and a launch-ready look in one line.",
+  "output": [
+    {
+      "id": "resp_123_message",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Meet the new drop: sharp design, fast story, and a launch-ready look in one line.",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 482,
+    "output_tokens": 43,
+    "total_tokens": 525
+  }
+}
+```
+
+**Image response example**
+
+```json
+{
+  "id": "resp_456",
+  "object": "response",
+  "created_at": 1773651300,
+  "status": "completed",
+  "model": "gpt-5.5",
+  "output": [
+    {
+      "id": "ig_456",
+      "type": "image_generation_call",
+      "status": "completed",
+      "revised_prompt": "A clean launch poster with a premium layout, strong product focal point, and minimal copy.",
+      "result": "iVBORw0KGgoAAAANSUhEUgAA..."
+    }
+  ],
+  "usage": {
+    "input_tokens": 521,
+    "output_tokens": 22,
+    "total_tokens": 543
+  }
+}
+```
+
+The `result` field contains a base64-encoded image. For follow-up image edits, keep using the same `session_id`; Samsar preserves the latest response chain automatically.
+
+**Headers**
+
+- `x-credits-charged`
+- `x-credits-remaining`
+
+**Common errors**
+
+- `400` missing or invalid `session_id`, or invalid `input`.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `403` session does not belong to the authenticated account.
+- `404` session not found.

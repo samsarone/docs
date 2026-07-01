@@ -1,6 +1,7 @@
 ---
 title: Image API
-description: Edit, enhance, and manage images with the /image endpoints.
+description: "Enhance, edit, white-label, validate receipts, and manage generated image sets with SamsarOne's image endpoints."
+image: img/og/image-api.png
 sidebar_position: 2
 slug: /image-api
 sidebar_label: Image API
@@ -23,17 +24,69 @@ import PlaygroundRail from '@site/src/components/PlaygroundRail';
 - Base URL: `https://api.samsar.one/v1`
 - Auth: `Authorization: Bearer <API_KEY>`
 - Responses include `x-credits-charged` and `x-credits-remaining` when credits are deducted.
-- All endpoints enqueue work; poll `/image/status?request_id=...` (or `/v1/status`) for completion, or use `/image/list` to fetch history.
+- Image generation and editing endpoints enqueue work; poll `/image/status?request_id=...` (or `/v1/status`) for completion, or use `/image/list` to fetch history.
+- `POST /image/assign_title` is synchronous and returns a text-style `{ "content": "..." }` payload.
 
 ## Pricing
 
 | Endpoint                 | Credits                                           | Notes                                                         |
 | ------------------------ | ------------------------------------------------- | ------------------------------------------------------------- |
-| `POST /image/enhance`    | 45 (`1k`) / 75 (`2k`) / 90 (`4k`)                   | Based on `resolution` (defaults to `1k`).                     |
-| `POST /image/remove_branding` | 75                                          | White label images and remove branding for marketplace listing. |
-| `POST /image/add_image_set` | `75 × requested_images`                        | `requested_images = num_images` (if provided) else `image_urls.length`. |
+| `POST /image/assign_title` | Usage-based credits                         | Image title generation. Returns synchronously. |
+| `POST /image/enhance`    | 11 (`0.5k`) / 15 (`1k`) / 22 (`2k`) / 29 (`4k`) | Based on `resolution` (defaults to `1k`). |
+| `POST /image/remove_branding` | 15                                          | Remove visible text from images for whitelabel marketplace listings. |
+| `POST /image/add_image_set` | `15 × requested_images`                    | `requested_images = num_images`. |
+| `POST /image/receipt_templates/create` | Free                                | Builds and saves a receipt template + normalized schema from one sample image. |
+| `GET /image/template_json` | Free                                            | Returns the saved structured template JSON for a `template_id` owned by your API key. |
+| `POST /image/receipt_templates/query` | 50                                     | Validates receipt against template and returns standardized JSON fields. |
 | `POST /image/create_rollup_banner` | 30                                        | Flat per request.                                              |
 | `POST /image/create_rollup_banner_with_enhance` | Variable                               | Enhance credits for low-res images + 30 credits per rollup request. |
+
+## POST /image/assign_title
+
+Assign a short SEO-friendly title to an image. The title is suitable for an image title or for client-side filename generation after camel-casing.
+
+This endpoint uses two generation steps:
+
+1. Analyze the image in low-detail vision mode for naming-relevant visual cues.
+2. Combine that description with optional metadata JSON to create one short title.
+
+**JSON request body**
+
+```json
+{
+  "image_url": "https://cdn.example.com/product-photo.png",
+  "metadata": {
+    "product": "linen travel shirt",
+    "collection": "spring essentials"
+  }
+}
+```
+
+You can also send `image_data` as a base64 image data URL.
+
+**Multipart request**
+
+```bash
+curl -X POST "https://api.samsar.one/v1/image/assign_title" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -F "image=@./product-photo.png" \
+  -F 'metadata={"product":"linen travel shirt","collection":"spring essentials"}'
+```
+
+Supported image file types are PNG, JPEG, WEBP, and non-animated GIF.
+
+**Success response (200)**
+
+```json
+{
+  "content": "Linen Travel Shirt"
+}
+```
+
+Response headers include:
+
+- `x-credits-charged: <credits>`
+- `x-credits-remaining: <remaining>`
 
 ## POST /image/enhance
 
@@ -44,7 +97,7 @@ Upscale and denoise an image.
 ```json
 {
   "image_url": "https://cdn.example.com/photo.png",
-  "resolution": "1k | 2k | 4k"
+  "resolution": "0.5k | 1k | 2k | 4k"
 }
 ```
 
@@ -63,14 +116,14 @@ Upscale and denoise an image.
   "image_url": "https://cdn.example.com/photo.png",
   "resolution": "1K",
   "aspect_ratio": "16:9",
-  "creditsCharged": 45,
-  "remainingCredits": 4955
+  "creditsCharged": 15,
+  "remainingCredits": 4985
 }
 ```
 
 ## POST /image/remove_branding
 
-Remove a watermark or logo.
+Remove visible text from an image.
 
 **Request body**
 
@@ -90,8 +143,8 @@ Remove a watermark or logo.
   "global_status_id": "img_rm_123",
   "case_type": "logo_remove",
   "image_url": "https://cdn.example.com/watermarked.png",
-  "creditsCharged": 75,
-  "remainingCredits": 4925
+  "creditsCharged": 15,
+  "remainingCredits": 4985
 }
 ```
 
@@ -133,9 +186,207 @@ Extend or save a set of images for downstream generation.
   "metadata": { "campaign": "spring" },
   "prompt": "Optional creative direction",
   "num_images": 4,
-  "creditsCharged": 300,
-  "remainingCredits": 4700
+  "creditsCharged": 60,
+  "remainingCredits": 4940
 }
+```
+
+## POST /image/receipt_templates/create
+
+Create and persist a reusable receipt extraction template from a sample receipt image.
+
+This endpoint is free (no credits deducted).
+
+**Request body**
+
+```json
+{
+  "image_url": "https://cdn.example.com/receipt-template.png",
+  "template_name": "kbank-transfer-template"
+}
+```
+
+- `image_url` required, public image URL.
+- `template_name` optional.
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "receipt_tpl_0e4f9f1dca744ec9b3a3f8df",
+  "template_hash": "f8b8f4e6e7d9b66d3f4a9e6f35b17c4d7ac4dce2f0d63f15e2d55b9872e3be35",
+  "template_name": "kbank-transfer-template",
+  "normalized_template": {
+    "schema_version": "1.0",
+    "merchant_hint": "Kasikornbank",
+    "currency_hint": "THB",
+    "rois": [
+      { "id": "meta_header", "label": "Header and Meta", "left": 0, "top": 0, "width": 1, "height": 0.35 },
+      { "id": "line_items", "label": "Line Items/Table", "left": 0, "top": 0.28, "width": 1, "height": 0.5 },
+      { "id": "totals", "label": "Totals", "left": 0.45, "top": 0.7, "width": 0.55, "height": 0.3 }
+    ],
+    "fields": [
+      { "key": "merchant_name", "type": "string", "required": true },
+      { "key": "transaction_date", "type": "date", "required": true },
+      { "key": "total", "type": "currency", "required": true }
+    ],
+    "validation_rules": {
+      "arithmetic": true,
+      "amount_tolerance": 0.05
+    }
+  },
+  "sample_receipt": {
+    "merchant_name": "Kasikornbank",
+    "transaction_date": "2026-01-14",
+    "total": 786
+  }
+}
+```
+
+## POST /image/receipt_templates/query
+
+Extract receipt fields by validating an input receipt image against an existing template.
+
+This endpoint charges **50 credits** per request.
+
+**Request body**
+
+```json
+{
+  "template_id": "receipt_tpl_0e4f9f1dca744ec9b3a3f8df",
+  "image_url": "https://cdn.example.com/receipt-instance.png"
+}
+```
+
+- `template_id` required.
+- `image_url` required.
+- The template must belong to the same API key. Cross-account template access returns `404`.
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "receipt_tpl_0e4f9f1dca744ec9b3a3f8df",
+  "template_hash": "f8b8f4e6e7d9b66d3f4a9e6f35b17c4d7ac4dce2f0d63f15e2d55b9872e3be35",
+  "template_name": "kbank-transfer-template",
+  "receipt_json": {
+    "merchant_name": "Kasikornbank",
+    "transaction_date": "2026-01-14",
+    "transaction_id": "TRBS260114764844309",
+    "currency": "THB",
+    "fee": 0,
+    "total": 786
+  },
+  "standardized_receipt": {
+    "merchant_name": "Kasikornbank",
+    "transaction_date": "2026-01-14",
+    "transaction_time": "17:25",
+    "transaction_id": "TRBS260114764844309",
+    "currency": "THB",
+    "subtotal": 786,
+    "tax": null,
+    "fee": 0,
+    "discount": null,
+    "total": 786,
+    "payment_method": "transfer",
+    "from_account": "xxx-x-xxxx-x",
+    "to_account": "xxx-x-xxxx-x"
+  },
+  "items": [],
+  "unreadable_fields": [],
+  "confidence": 0.93,
+  "validation": {
+    "is_valid": true,
+    "issues": []
+  },
+  "attempts": 1
+}
+```
+
+Response headers include:
+- `x-credits-charged: 50`
+- `x-credits-remaining: <remaining>`
+
+## GET /image/template_json
+
+Fetch a saved structured receipt template by `template_id`.
+
+This endpoint validates ownership against your API key and returns the template JSON only when the template belongs to that user.
+
+Primary route: `GET /image/template_json`<br />
+Alias route: `GET /image/receipt_templates/template_json`
+
+**Query params**
+
+- `template_id` required.
+
+**Sample request**
+
+```bash
+curl "https://api.samsar.one/v1/image/template_json?template_id=receipt_tpl_0e4f9f1dca744ec9b3a3f8df" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY"
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "receipt_tpl_0e4f9f1dca744ec9b3a3f8df",
+  "template_hash": "f8b8f4e6e7d9b66d3f4a9e6f35b17c4d7ac4dce2f0d63f15e2d55b9872e3be35",
+  "template_name": "kbank-transfer-template",
+  "source_image_url": "https://cdn.example.com/receipt-template.png",
+  "normalized_template": {
+    "schema_version": "1.0",
+    "merchant_hint": "Kasikornbank",
+    "currency_hint": "THB",
+    "rois": [
+      { "id": "meta_header", "label": "Header and Meta", "left": 0, "top": 0, "width": 1, "height": 0.35 },
+      { "id": "line_items", "label": "Line Items/Table", "left": 0, "top": 0.28, "width": 1, "height": 0.5 },
+      { "id": "totals", "label": "Totals", "left": 0.45, "top": 0.7, "width": 0.55, "height": 0.3 }
+    ],
+    "fields": [
+      { "key": "merchant_name", "type": "string", "required": true },
+      { "key": "transaction_date", "type": "date", "required": true },
+      { "key": "total", "type": "currency", "required": true }
+    ],
+    "validation_rules": {
+      "arithmetic": true,
+      "amount_tolerance": 0.05
+    }
+  },
+  "template_json": {
+    "schema_version": "1.0"
+  },
+  "sample_receipt": {
+    "merchant_name": "Kasikornbank",
+    "transaction_date": "2026-01-14",
+    "total": 786
+  },
+  "created_at": "2026-03-01T00:26:29.478Z",
+  "updated_at": "2026-03-01T00:26:29.478Z"
+}
+```
+
+- `template_json` mirrors `normalized_template` and is returned as a compatibility alias.
+
+**Error responses**
+
+- `400` missing `template_id`.
+- `401` invalid API key.
+- `404` template does not exist or does not belong to this API key.
+
+### JavaScript SDK (samsar-js)
+
+```ts
+import SamsarClient from 'samsar-js';
+
+const samsar = new SamsarClient({ apiKey: process.env.SAMSAR_API_KEY! });
+
+const templateJson = await samsar.getReceiptTemplateJson(
+  'receipt_tpl_0e4f9f1dca744ec9b3a3f8df',
+);
+
+console.log(templateJson.data.template_json);
 ```
 
 ## GET /image/status
@@ -155,7 +406,6 @@ curl "https://api.samsar.one/v1/image/status?request_id=img_enh_123" \
   "request_id": "img_enh_123",
   "status": "PENDING",
   "type": "image",
-  "provider": "NANOBANANA",
   "case_type": "image_enhance"
 }
 ```
@@ -168,7 +418,6 @@ curl "https://api.samsar.one/v1/image/status?request_id=img_enh_123" \
   "request_id": "img_enh_123",
   "status": "COMPLETED",
   "type": "image",
-  "provider": "NANOBANANA",
   "case_type": "image_enhance",
   "result_url": "https://cdn.samsar.one/images/img_enh_123.png"
 }
@@ -197,7 +446,6 @@ curl "https://api.samsar.one/v1/image/list?limit=50" \
       "request_id": "img_rm_123",
       "status": "COMPLETED",
       "type": "image",
-      "provider": "NANOBANANA",
       "case_type": "logo_remove",
       "request_type": "API",
       "result_url": "https://cdn.samsar.one/images/img_rm_123.png",
@@ -209,7 +457,6 @@ curl "https://api.samsar.one/v1/image/list?limit=50" \
       "request_id": "img_set_987",
       "status": "PENDING",
       "type": "image",
-      "provider": "NANOBANANA",
       "case_type": "image_list_to_image_set",
       "request_type": "API",
       "created_at": "2024-08-20T08:15:55.000Z",
@@ -333,8 +580,8 @@ All `*_ratio` values are fractions between 0 and 1. Values are validated; invali
   "input_image_urls": [
     "https://cdn.example.com/tile-1-enhanced.png"
   ],
-  "creditsCharged": 180,
-  "remainingCredits": 4820
+  "creditsCharged": 59,
+  "remainingCredits": 4941
 }
 ```
 

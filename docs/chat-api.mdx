@@ -1,6 +1,7 @@
 ---
 title: Chat API
-description: Enhance copy with the /chat endpoints.
+description: "Improve copy and manage embeddings with synchronous chat endpoints for app and content workflows."
+image: img/og/chat-api.png
 sidebar_position: 3
 slug: /chat-api
 sidebar_label: Chat API
@@ -24,7 +25,9 @@ import PlaygroundRail from '@site/src/components/PlaygroundRail';
 - Auth: `Authorization: Bearer <API_KEY>`
 - Pricing:
   - `/chat/enhance`: **30 credits** per request.
-  - Embeddings (`/chat/create_embedding`, `/chat/update_embedding`, `/chat/search_against_embedding`, `/chat/similar_to_embedding`): **$1 per million input tokens** (OpenAI tokenization for `text-embedding-3-large`). Credits use the standard 100 credits per USD mapping.
+  - Embedding routes are usage-based. Credits scale with the amount of text processed and use the standard **100 credits = $1** conversion.
+  - URL embedding routes add crawl cost before credit conversion and apply a **2.5x** ingestion multiplier because they include both crawling and embedding work.
+  - `/chat/generate_embeddings_from_plain_text` applies a **2.5x** multiplier to embedding-token cost only. It does not add crawl charges.
   - `/chat/delete_embedding` and `/chat/delete_embeddings`: no token charges.
 - Synchronous: the response is returned in the same request; no `/status` polling needed.
 
@@ -81,7 +84,7 @@ curl -X POST https://api.samsar.one/v1/chat/enhance \
 
 ## POST /chat/create_embedding
 
-Create a new embedding template from a JSON array. Each record is converted into a search document, structured filters (numeric/categorical fields like `city`, `price`, `duration`, `min_age`, `max_age`) are detected and stored, and embeddings are generated using `text-embedding-3-large`.
+Create a new embedding template from either a JSON array or a URL list. JSON records are embedded directly. URL inputs are first crawled with Firecrawl, minimally cleaned, normalized into the same compatible record structure, and then embedded using `text-embedding-3-large`.
 
 **Request body**
 
@@ -100,7 +103,8 @@ Create a new embedding template from a JSON array. Each record is converted into
 }
 ```
 
-- `records` required array of JSON objects.
+- `records` required when embedding JSON input.
+- `urls` or `url` can be used instead of `records` to build embeddings from crawled web pages.
 - `name` optional string. Also accepted: `embedding_name`, `template_name`.
 - Each record should include an `id`, `_id`, or equivalent identifier. If missing, the API generates one per record.
 - `field_options` optional map (or array) of per-field flags:
@@ -123,10 +127,32 @@ You can also inline flags in records using a `{ value, searchable, filterable, r
 }
 ```
 
+**URL request body**
+
+```json
+{
+  "name": "product-docs",
+  "urls": [
+    "https://example.com/docs/getting-started",
+    "https://example.com/docs/pricing"
+  ]
+}
+```
+
+- URL mode crawls each URL with Firecrawl before embedding.
+- Optional `levels` controls crawl depth for URL mode. It can be passed as a query param or body field.
+  - `1`: crawl only the listed seed URLs.
+  - `2`: crawl each seed URL plus URLs linked directly from it.
+  - `3`: crawl each seed URL plus two link hops outward.
+  - Default: `2`. Maximum: `3`.
+- URL mode is capped at `50` total crawled pages per request across all seed URLs.
+- Returned embeddings remain compatible with `/chat/search_against_embedding` and `/chat/similar_to_embedding`.
+- URL mode responses may include `input_url_count`, `processed_url_count`, `firecrawl_credits_used`, `skipped_urls`, and `crawl_errors`.
+
 **Sample request**
 
 ```bash
-curl -X POST https://api.samsar.one/v1/chat/create_embedding \
+curl -X POST "https://api.samsar.one/v1/chat/create_embedding?levels=2" \
   -H "Authorization: Bearer $SAMSAR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -161,7 +187,154 @@ curl -X POST https://api.samsar.one/v1/chat/create_embedding \
 
 **Common errors**
 
-- `400` missing `records`.
+- `400` missing `records` and `urls`, or invalid URL input.
+- `401` invalid API key.
+- `402` insufficient credits.
+
+---
+
+## POST /chat/create_embedding_from_url
+
+Create a new embedding template from one URL or a URL list. This is the explicit URL-only variant of `/chat/create_embedding` and uses the same Firecrawl-backed ingestion flow.
+
+**Request body**
+
+```json
+{
+  "name": "product-docs",
+  "urls": [
+    "https://example.com/docs/getting-started",
+    "https://example.com/docs/pricing"
+  ]
+}
+```
+
+- `urls` required array of URL strings. `url` is also accepted for a single URL.
+- Optional `levels` controls crawl depth for URL mode. It can be sent as a query param or body field.
+  - `1`: crawl only the listed seed URLs.
+  - `2`: crawl each seed URL plus URLs linked directly from it.
+  - `3`: crawl each seed URL plus two link hops outward.
+  - Default: `2`. Maximum: `3`.
+- URL mode is capped at `50` total crawled pages per request across all seed URLs.
+- `field_options` is optional and follows the same rules as `/chat/create_embedding`.
+- Samsar crawls the URLs, minimally cleans the extracted text, stores normalized URL metadata, and creates embeddings in the same query-compatible format as JSON-record embeddings.
+- Billing applies Firecrawl crawl usage at a **2.5x** multiplier based on actual pages crawled, then applies the embedding token cost with its own **2.5x** multiplier.
+
+**Sample request**
+
+```bash
+curl -X POST "https://api.samsar.one/v1/chat/create_embedding_from_url?levels=2" \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "product-docs",
+    "urls": [
+      "https://example.com/docs/getting-started",
+      "https://example.com/docs/pricing"
+    ]
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_hash": "b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "hash_link": "embedding_template:b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "record_count": 2,
+  "input_url_count": 2,
+  "processed_url_count": 12,
+  "firecrawl_credits_used": 12,
+  "crawl_levels": 2,
+  "max_links": 50,
+  "structured_fields": [
+    { "key": "hostname", "type": "string" },
+    { "key": "status_code", "type": "number" }
+  ],
+  "unstructured_fields": ["title", "description", "content"]
+}
+```
+
+**Common errors**
+
+- `400` missing or invalid `urls`.
+- `401` invalid API key.
+- `402` insufficient credits.
+- `422` URLs crawled successfully but produced no extractable content.
+- `5xx` Firecrawl crawl failure or upstream processing failure.
+
+---
+
+## POST /chat/generate_embeddings_from_plain_text
+
+Create a new embedding template from already cleaned plain text input. This route is the embedding-only stage of the URL ingestion flow: you provide the cleaned text directly, Samsar skips crawling, and it stores the result in the same query-compatible embedding format used by the JSON and URL endpoints.
+
+**Request body**
+
+```json
+{
+  "name": "product-docs-clean",
+  "plain_text": [
+    {
+      "url": "https://example.com/docs/getting-started",
+      "title": "Getting Started",
+      "content": "Cleaned plain text content from the page."
+    }
+  ]
+}
+```
+
+- `plain_text` required. Accepted shapes:
+  - a single string
+  - a single object
+  - an array of strings or objects
+- For object entries, the cleaned text can be provided in `plain_text`, `content`, `text`, `cleaned_text`, `markdown`, or `body`.
+- Optional object fields such as `url`, `title`, `description`, and `language` are preserved and normalized into the stored record when present.
+- `field_options` is optional and follows the same rules as `/chat/create_embedding`.
+- Pricing uses the embedding token cost with a **2.5x** multiplier and does **not** charge any crawl credits.
+
+**Sample request**
+
+```bash
+curl -X POST https://api.samsar.one/v1/chat/generate_embeddings_from_plain_text \
+  -H "Authorization: Bearer $SAMSAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "product-docs-clean",
+    "plain_text": [
+      {
+        "url": "https://example.com/docs/getting-started",
+        "title": "Getting Started",
+        "content": "Cleaned plain text content from the page."
+      },
+      {
+        "url": "https://example.com/docs/pricing",
+        "title": "Pricing",
+        "content": "Cleaned pricing page text."
+      }
+    ]
+  }'
+```
+
+**Success response (200)**
+
+```json
+{
+  "template_id": "66f3b0d64c8bca9c6f2bd1a3",
+  "template_hash": "b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "hash_link": "embedding_template:b0e6f2d2c2f1d0c4d9f7f3a1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "record_count": 2,
+  "structured_fields": [
+    { "key": "hostname", "type": "string" }
+  ],
+  "unstructured_fields": ["title", "content"]
+}
+```
+
+**Common errors**
+
+- `400` missing or invalid `plain_text`.
 - `401` invalid API key.
 - `402` insufficient credits.
 

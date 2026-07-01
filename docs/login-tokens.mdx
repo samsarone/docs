@@ -1,6 +1,7 @@
 ---
 title: Login Tokens
-description: Create short-lived login tokens for client authentication.
+description: "Mint short-lived login tokens and exchange them for client auth tokens in Samsar applications."
+image: img/og/login-tokens.png
 sidebar_position: 1
 slug: /login-tokens
 sidebar_label: Login Tokens
@@ -9,6 +10,8 @@ sidebar_label: Login Tokens
 # Login Tokens
 
 Use this endpoint to mint a short-lived `loginToken` from your API key. The login token can be exchanged for a long-lived client `authToken` via `/users/verify_token`.
+
+For external platform users such as Whop members, use [`POST /external_users/create_login_token`](/external-users#post-external_userscreate_login_token) instead.
 
 - Base URL: `https://api.samsar.one/v1`
 - Auth: `Authorization: Bearer <API_KEY>`
@@ -25,7 +28,7 @@ No body is required.
 
 ```bash
 curl -X POST https://api.samsar.one/v1/create_login_token \
-  -H "Authorization: Bearer $SAMSAR_API_KEY"
+  -H "Authorization: Bearer YOUR_API_KEY_****************"
 ```
 
 **Success response (200)**
@@ -62,3 +65,5 @@ curl "https://api.samsar.one/users/verify_token?loginToken=$LOGIN_TOKEN"
   "email": "user@example.com"
 }
 ```
+
+For external-user login tokens, the response includes `isExternalUser: true` plus the external user profile fields and the external-user-scoped `authToken`.
