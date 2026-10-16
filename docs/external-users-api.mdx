@@ -60,6 +60,8 @@ Recommended for multi-app providers:
 
 The first successful bootstrap request upserts an `ExternalUser` record mapped to the owning Samsar account internally. The stored record keeps both the owning internal user id and the external user's `unique_key`.
 
+Established identities retain the owning account, any customer sub-account ownership, and the billing user type set at creation. Profile updates cannot change these fields; identity conflicts across owners return `403`. Metadata, including `metadata.billingMode`, cannot select or switch the billing source.
+
 For V2 clients that only need to register and reference an external user by a single key, use `POST /v2/user/create_external_user` with an internal API key, user auth token, or APP_KEY:
 
 ```bash
@@ -77,7 +79,7 @@ The response includes `external_user.unique_key` and a `reference` object. Futur
 
 ## Auth model
 
-There are two supported auth patterns.
+There are two supported auth patterns for ordinary external-user operations. Manual credit grants are restricted to signed-in administrators; see [manual credit grants](#post-external_userscreditsgrant).
 
 ### 1. Server-to-server platform flow
 
@@ -611,11 +613,15 @@ Success response:
 
 ## POST /external_users/credits/grant
 
-Manually grant credits to an external user. This also credits the shared platform account internally so upstream requests stay in sync.
+Manually mint credits for an external user and the shared platform account so upstream balances stay in sync. This endpoint requires a signed-in administrator's user auth token in `Authorization: Bearer <ADMIN_AUTH_TOKEN>`. Customer or parent-account API keys, APP_KEY credentials, external-user auth tokens, and customer sub-account keys are not authorized.
+
+The target external user must belong to the authenticated administrator's account; targets owned by another account return `403`. `input.credits` must be a positive safe integer (at most `9007199254740991`).
+
+This is an administrative operation, not a customer self-service top-up. For paid credit purchases, use [`POST /external_users/credits/recharge`](#post-external_userscreditsrecharge).
 
 ```bash
 curl -X POST https://api.samsar.one/v1/external_users/credits/grant \
-  -H "Authorization: Bearer YOUR_PLATFORM_API_KEY_****************" \
+  -H "Authorization: Bearer <ADMIN_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "external_user": {
@@ -635,7 +641,6 @@ Success response:
 {
   "creditsGranted": 1000,
   "remainingCredits": 1000,
-  "internalRemainingCredits": 12000,
   "externalUser": {
     "provider": "whop",
     "external_user_id": "usr_123",
@@ -643,6 +648,8 @@ Success response:
   }
 }
 ```
+
+Manual grants return `403` when authenticated without a signed-in administrator's user auth token.
 
 ## POST /external_users/credits/recharge
 
